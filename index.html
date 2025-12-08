@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RPG 世界生成器</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <header>
+        <h2>RPG 世界生成器 (比例修復版)</h2>
+    </header>
+
+    <div class="main-container">
+        <!-- 左/上：地圖區 -->
+        <div class="viewport-area">
+            <div class="map-wrapper">
+                <canvas id="terrainLayer" class="layer" width="300" height="200"></canvas>
+                <canvas id="cloudLayer" class="layer" width="600" height="200"></canvas>
+                <div class="hud" id="hud">Hover info...</div>
+            </div>
+        </div>
+
+        <!-- 右/下：控制區 -->
+        <div class="controls-area">
+            <button id="btnGenerate">🎲 生成新世界</button>
+
+            <div class="control-group">
+                <span class="group-title">核心參數</span>
+
+                <label>縮放 (Scale) <span id="val_scale" class="val">60</span></label>
+                <input type="range" id="inp_scale" min="10" max="150" value="60">
+
+                <label>細節 (Octaves) <span id="val_octaves" class="val">5</span></label>
+                <input type="range" id="inp_octaves" min="1" max="6" step="1" value="5">
+            </div>
+
+            <div class="control-group">
+                <span class="group-title">環境設定</span>
+
+                <label>海平面 <span id="val_sea" class="val">0.35</span></label>
+                <input type="range" id="inp_sea" min="0.1" max="0.8" step="0.05" value="0.35">
+
+                <label>降雨量 <span id="val_moist" class="val">0</span></label>
+                <input type="range" id="inp_moist" min="-0.4" max="0.4" step="0.05" value="0">
+            </div>
+
+            <div class="control-group">
+                <label style="justify-content: flex-start; gap: 10px; margin:0;">
+                    <input type="checkbox" id="chk_clouds" checked>
+                    ☁️ 顯示動態雲層
+                </label>
+            </div>
+
+            <div class="control-group">
+                <span class="group-title">圖例</span>
+                <div class="legend">
+                    <div class="legend-item"><div class="box" style="background:#44447a"></div> 深海</div>
+                    <div class="legend-item"><div class="box" style="background:#3050a0"></div> 海洋</div>
+                    <div class="legend-item"><div class="box" style="background:#e9ddc7"></div> 沙灘</div>
+                    <div class="legend-item"><div class="box" style="background:#64a03c"></div> 草原</div>
+                    <div class="legend-item"><div class="box" style="background:#1e5a28"></div> 森林</div>
+                    <div class="legend-item"><div class="box" style="background:#d4bc8b"></div> 沙漠</div>
+                    <div class="legend-item"><div class="box" style="background:#fff"></div> 雪地</div>
+                    <div class="legend-item"><div class="box" style="background:#5e7255"></div> 沼澤</div>
+                    <div class="legend-item"><div class="box" style="background:#6e6e6e"></div> 岩石</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript 模組 -->
+    <script type="module" src="js/noise.js"></script>
+    <script type="module" src="js/config.js"></script>
+    <script type="module" src="js/terrain.js"></script>
+    <script type="module" src="js/renderer.js"></script>
+    <script type="module" src="js/ui.js"></script>
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,248 @@
+/* ===== 全域變數 ===== */
+:root {
+    --bg: #121212;
+    --panel: #1e1e1e;
+    --accent: #69f0ae;
+    --text: #e0e0e0;
+}
+
+/* ===== 基礎佈局 ===== */
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: var(--bg);
+    color: var(--text);
+    margin: 0;
+    padding: 0;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ===== 標題列 ===== */
+header {
+    padding: 10px 20px;
+    background: #000;
+    border-bottom: 1px solid #333;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+h2 {
+    margin: 0;
+    color: var(--accent);
+    font-size: 1.1rem;
+}
+
+/* ===== 主佈局容器 ===== */
+.main-container {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+/* ===== 左側：地圖預覽區 ===== */
+.viewport-area {
+    flex: 2;
+    background: #000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    padding: 20px;
+    overflow: hidden;
+}
+
+/* 地圖容器：強制 3:2 比例 */
+.map-wrapper {
+    position: relative;
+    width: 100%;
+    max-width: 800px;
+    aspect-ratio: 3 / 2;
+    background: #111;
+    box-shadow: 0 0 30px rgba(0,0,0,0.8);
+    border: 1px solid #333;
+}
+
+.layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+}
+
+/* 雲層動畫 */
+#cloudLayer {
+    opacity: 0.5;
+    pointer-events: none;
+    width: 200%;
+    height: 100%;
+    left: 0;
+    animation: drift 80s linear infinite;
+}
+
+@keyframes drift {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+}
+
+/* ===== 右側：控制面板 ===== */
+.controls-area {
+    flex: 1;
+    min-width: 300px;
+    max-width: 400px;
+    background: var(--panel);
+    border-left: 1px solid #333;
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* ===== 手機版響應式設計 ===== */
+@media (max-width: 768px) {
+    .main-container {
+        flex-direction: column;
+        overflow-y: auto;
+    }
+
+    .viewport-area {
+        flex: none;
+        width: 100%;
+        padding: 10px;
+        box-sizing: border-box;
+        background: #000;
+    }
+
+    .controls-area {
+        flex: none;
+        width: 100%;
+        max-width: none;
+        border-left: none;
+        border-top: 1px solid #333;
+    }
+
+    .map-wrapper {
+        max-width: 100%;
+    }
+}
+
+/* ===== UI 元件 ===== */
+.control-group {
+    background: rgba(255,255,255,0.05);
+    padding: 15px;
+    border-radius: 8px;
+}
+
+.group-title {
+    font-size: 0.8em;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 10px;
+    display: block;
+    border-bottom: 1px solid #444;
+    padding-bottom: 5px;
+}
+
+button {
+    background: var(--accent);
+    color: #000;
+    border: none;
+    padding: 14px;
+    border-radius: 6px;
+    font-weight: bold;
+    font-size: 1rem;
+    cursor: pointer;
+    width: 100%;
+    transition: transform 0.1s;
+}
+
+button:active {
+    transform: scale(0.98);
+}
+
+button:hover {
+    opacity: 0.9;
+}
+
+label {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    font-size: 0.9em;
+    color: #ccc;
+}
+
+.val {
+    color: var(--accent);
+    font-family: monospace;
+}
+
+/* ===== 滑桿樣式 ===== */
+input[type=range] {
+    width: 100%;
+    margin-bottom: 15px;
+    accent-color: var(--accent);
+    height: 6px;
+    background: #444;
+    border-radius: 3px;
+    appearance: none;
+}
+
+input[type=range]::-webkit-slider-thumb {
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    background: var(--accent);
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+input[type=range]::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    background: var(--accent);
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+}
+
+/* ===== 圖例 ===== */
+.legend {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    font-size: 0.75em;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    color: #aaa;
+}
+
+.box {
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+}
+
+/* ===== HUD (懸停資訊) ===== */
+.hud {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    background: rgba(0,0,0,0.8);
+    padding: 4px 8px;
+    border-radius: 4px;
+    color: var(--accent);
+    font-size: 12px;
+    pointer-events: none;
+    font-family: monospace;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
