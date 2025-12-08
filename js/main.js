@@ -4,7 +4,7 @@
  */
 
 import { initRenderer, renderAll } from './renderer.js';
-import { generateTerrain, getHeight, getMoisture } from './terrain.js';
+import { generateTerrain, getHeight, getMoisture, getTemperature } from './terrain.js';
 import { initUI } from './ui.js';
 import noise from './noise.js';
 import { terrainConfig, getBiomeColor } from './config.js';
@@ -60,16 +60,17 @@ function runGoldenMaster() {
         { x: 299, y: 199 }   // 右下角
     ];
 
-    console.log('  🗺️  測試地形資料：');
+    console.log('  🗺️  測試地形資料（包含溫度層）：');
     for (const point of testPoints) {
         const h = getHeight(point.x, point.y);
         const m = getMoisture(point.x, point.y);
-        const color = getBiomeColor(h, m);
+        const t = getTemperature(point.x, point.y);
+        const color = getBiomeColor(h, m, t);
 
-        console.log(`    座標 (${point.x}, ${point.y}): h=${h.toFixed(3)}, m=${m.toFixed(3)}, color=[${color.join(',')}]`);
+        console.log(`    座標 (${point.x}, ${point.y}): h=${h.toFixed(3)}, m=${m.toFixed(3)}, t=${t.toFixed(3)}, color=[${color.join(',')}]`);
 
         // 驗證範圍
-        if (h < 0 || h > 1 || m < 0 || m > 1) {
+        if (h < 0 || h > 1 || m < 0 || m > 1 || t < 0 || t > 1) {
             console.error(`    ❌ 座標 (${point.x}, ${point.y}) 的值超出範圍！`);
             passed = false;
         }
@@ -81,20 +82,22 @@ function runGoldenMaster() {
         }
     }
 
-    // 測試 4: 生物群系邏輯一致性
+    // 測試 4: Whittaker 生物群系邏輯一致性（三軸測試）
     const biomeTests = [
-        { h: 0.2, m: 0.5, name: '海洋' },
-        { h: 0.5, m: 0.3, name: '草原' },
-        { h: 0.7, m: 0.6, name: '森林' },
-        { h: 0.9, m: 0.5, name: '高山雪地' },
-        { h: 0.5, m: 0.1, name: '沙漠' }
+        { h: 0.2, m: 0.5, t: 0.5, name: '海洋' },
+        { h: 0.5, m: 0.3, t: 0.5, name: '溫帶草原' },
+        { h: 0.7, m: 0.6, t: 0.5, name: '溫帶森林' },
+        { h: 0.9, m: 0.5, t: 0.3, name: '雪山' },
+        { h: 0.5, m: 0.1, t: 0.7, name: '熱沙漠' },
+        { h: 0.5, m: 0.6, t: 0.7, name: '熱帶森林' },
+        { h: 0.5, m: 0.3, t: 0.2, name: '苔原' }
     ];
 
-    console.log('  🌍 測試生物群系邏輯：');
+    console.log('  🌍 測試 Whittaker 生物群系邏輯（高度×濕度×溫度）：');
     for (const test of biomeTests) {
-        const color = getBiomeColor(test.h, test.m);
+        const color = getBiomeColor(test.h, test.m, test.t);
         const isValid = color.every(c => c >= 0 && c <= 255);
-        console.log(`    h=${test.h}, m=${test.m} → RGB=[${color.join(',')}] ${isValid ? '✓' : '✗'}`);
+        console.log(`    h=${test.h}, m=${test.m}, t=${test.t} → RGB=[${color.join(',')}] ${isValid ? '✓' : '✗'}`);
 
         if (!isValid) {
             passed = false;

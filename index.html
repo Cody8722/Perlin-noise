@@ -43,6 +43,9 @@
 
                 <label>降雨量 <span id="val_moist" class="val">0</span></label>
                 <input type="range" id="inp_moist" min="-0.4" max="0.4" step="0.05" value="0">
+
+                <label>🌡️ 溫度 (冰河期 ↔ 暖化) <span id="val_temp" class="val">0</span></label>
+                <input type="range" id="inp_temp" min="-0.5" max="0.5" step="0.05" value="0">
             </div>
 
             <div class="control-group">
@@ -53,15 +56,34 @@
             </div>
 
             <div class="control-group">
-                <span class="group-title">圖例</span>
+                <span class="group-title">圖例 (Whittaker 生物群系)</span>
                 <div class="legend">
+                    <!-- 水域 -->
                     <div class="legend-item"><div class="box" style="background:#44447a"></div> 深海</div>
                     <div class="legend-item"><div class="box" style="background:#3050a0"></div> 海洋</div>
                     <div class="legend-item"><div class="box" style="background:#e9ddc7"></div> 沙灘</div>
-                    <div class="legend-item"><div class="box" style="background:#64a03c"></div> 草原</div>
-                    <div class="legend-item"><div class="box" style="background:#1e5a28"></div> 森林</div>
-                    <div class="legend-item"><div class="box" style="background:#d4bc8b"></div> 沙漠</div>
+
+                    <!-- 極地/高山 -->
+                    <div class="legend-item"><div class="box" style="background:#f0f8ff"></div> 冰原</div>
+                    <div class="legend-item"><div class="box" style="background:#aab4aa"></div> 苔原</div>
                     <div class="legend-item"><div class="box" style="background:#fff"></div> 雪地</div>
+
+                    <!-- 寒帶 -->
+                    <div class="legend-item"><div class="box" style="background:#3c503c"></div> 針葉林</div>
+                    <div class="legend-item"><div class="box" style="background:#b4b4a0"></div> 寒漠</div>
+
+                    <!-- 溫帶 -->
+                    <div class="legend-item"><div class="box" style="background:#32783c"></div> 溫帶森林</div>
+                    <div class="legend-item"><div class="box" style="background:#78a050"></div> 溫帶草原</div>
+                    <div class="legend-item"><div class="box" style="background:#968c64"></div> 灌木叢</div>
+
+                    <!-- 熱帶 -->
+                    <div class="legend-item"><div class="box" style="background:#0a3214"></div> 熱帶雨林</div>
+                    <div class="legend-item"><div class="box" style="background:#1e5a28"></div> 熱帶森林</div>
+                    <div class="legend-item"><div class="box" style="background:#a09650"></div> 莽原</div>
+                    <div class="legend-item"><div class="box" style="background:#d4bc8b"></div> 熱沙漠</div>
+
+                    <!-- 特殊 -->
                     <div class="legend-item"><div class="box" style="background:#5e7255"></div> 沼澤</div>
                     <div class="legend-item"><div class="box" style="background:#6e6e6e"></div> 岩石</div>
                 </div>

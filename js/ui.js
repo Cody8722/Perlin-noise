@@ -58,6 +58,7 @@ export function initUI() {
     bindSlider('inp_octaves', 'val_octaves', 'octaves', false);
     bindSlider('inp_sea', 'val_sea', 'seaLevel', true);
     bindSlider('inp_moist', 'val_moist', 'moistureOffset', true);
+    bindSlider('inp_temp', 'val_temp', 'temperatureOffset', true);  // 新增：溫度偏移
 
     // 綁定雲層切換
     const cloudCheckbox = document.getElementById('chk_clouds');
@@ -91,11 +92,11 @@ function initMapHover() {
         // 檢查座標是否有效
         if (x >= 0 && x < MAP_CONFIG.width && y >= 0 && y < MAP_CONFIG.height) {
             const index = y * MAP_CONFIG.width + x;
-            const { height, moisture } = getTerrainData(index);
+            const { height, moisture, temperature } = getTerrainData(index);
 
-            // 顯示生物群系名稱
+            // 顯示生物群系名稱（包含溫度資訊）
             hud.style.opacity = '1';
-            hud.textContent = getBiomeName(height, moisture);
+            hud.textContent = `${getBiomeName(height, moisture, temperature)} (T:${(temperature * 100).toFixed(0)}%)`;
         }
     });
 

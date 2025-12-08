@@ -34,9 +34,10 @@ export function renderTerrain() {
             const index = y * MAP_CONFIG.width + x;
             const height = mapData.height[index];
             const moisture = mapData.moisture[index];
+            const temperature = mapData.temperature[index];  // 新增：讀取溫度資料
 
-            // 獲取生物群系顏色
-            const color = getBiomeColor(height, moisture);
+            // 獲取生物群系顏色（使用三軸分類）
+            const color = getBiomeColor(height, moisture, temperature);
 
             // 簡單陰影效果（根據左側高度差）
             let shadow = 1;
