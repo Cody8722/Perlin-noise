@@ -5,7 +5,7 @@
 
 import { MAP_CONFIG, terrainConfig, updateConfig, generateNewSeed, getBiomeName } from './config.js';
 import { generateTerrain, getTerrainData } from './terrain.js';
-import { renderTerrain, toggleClouds } from './renderer.js';
+import { renderTerrain, toggleClouds, setRenderMode, getRenderMode } from './renderer.js';
 
 // 防抖計時器
 let debounceTimer;
@@ -66,8 +66,49 @@ export function initUI() {
         toggleClouds(cloudCheckbox.checked);
     });
 
+    // 綁定視圖模式切換按鈕
+    initViewModeButtons();
+
     // 初始化地圖懸停事件
     initMapHover();
+}
+
+/**
+ * 初始化視圖模式切換按鈕
+ */
+function initViewModeButtons() {
+    const modes = ['biome', 'height', 'moisture', 'temperature'];
+
+    modes.forEach(mode => {
+        const button = document.getElementById(`btn_${mode}`);
+        if (button) {
+            button.addEventListener('click', () => {
+                // 設定渲染模式
+                setRenderMode(mode);
+
+                // 更新按鈕樣式（active 狀態）
+                modes.forEach(m => {
+                    const btn = document.getElementById(`btn_${m}`);
+                    if (btn) {
+                        if (m === mode) {
+                            btn.classList.add('active');
+                        } else {
+                            btn.classList.remove('active');
+                        }
+                    }
+                });
+
+                // 根據模式顯示/隱藏圖例
+                const legend = document.querySelector('.legend-group');
+                if (legend) {
+                    legend.style.display = mode === 'biome' ? 'block' : 'none';
+                }
+
+                // 重新渲染
+                renderTerrain();
+            });
+        }
+    });
 }
 
 /**

@@ -246,3 +246,40 @@ input[type=range]::-moz-range-thumb {
     opacity: 0;
     transition: opacity 0.2s;
 }
+
+/* ===== 視圖模式按鈕 ===== */
+.view-mode-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.view-btn {
+    background: rgba(255,255,255,0.05);
+    color: var(--text);
+    border: 1px solid #444;
+    padding: 10px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-weight: normal;
+}
+
+.view-btn:hover {
+    background: rgba(255,255,255,0.1);
+    border-color: #666;
+    transform: translateY(-1px);
+}
+
+.view-btn.active {
+    background: var(--accent);
+    color: #000;
+    border-color: var(--accent);
+    font-weight: bold;
+}
+
+.view-btn:active {
+    transform: scale(0.98);
+}

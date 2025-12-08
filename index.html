@@ -26,6 +26,16 @@
             <button id="btnGenerate">🎲 生成新世界</button>
 
             <div class="control-group">
+                <span class="group-title">視圖模式</span>
+                <div class="view-mode-buttons">
+                    <button id="btn_biome" class="view-btn active">🌍 生物群系</button>
+                    <button id="btn_height" class="view-btn">🏔️ 高度</button>
+                    <button id="btn_moisture" class="view-btn">💧 濕度</button>
+                    <button id="btn_temperature" class="view-btn">🌡️ 溫度</button>
+                </div>
+            </div>
+
+            <div class="control-group">
                 <span class="group-title">核心參數</span>
 
                 <label>縮放 (Scale) <span id="val_scale" class="val">60</span></label>
@@ -55,7 +65,7 @@
                 </label>
             </div>
 
-            <div class="control-group">
+            <div class="control-group legend-group">
                 <span class="group-title">圖例 (Whittaker 生物群系)</span>
                 <div class="legend">
                     <!-- 水域 -->
