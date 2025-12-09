@@ -24,12 +24,40 @@ class PerlinNoise {
     }
 
     /**
-     * 初始化置換表（使用種子）
+     * Mulberry32 PRNG（確定性隨機數生成器）
+     * 用於從種子生成一致的隨機序列
      * @param {number} seed - 隨機種子
+     * @returns {function} 返回 [0, 1) 範圍的隨機數生成器
+     */
+    mulberry32(seed) {
+        return function() {
+            seed |= 0;
+            seed = seed + 0x6D2B79F5 | 0;
+            let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+            t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+            return ((t ^ t >>> 14) >>> 0) / 4294967296;
+        };
+    }
+
+    /**
+     * 初始化置換表（使用種子）
+     * 使用 Mulberry32 PRNG 確保不同種子產生不同的置換表
+     * @param {number} seed - 隨機種子（支援完整 32 位元整數）
      */
     init(seed) {
+        // 使用 Mulberry32 生成確定性隨機序列
+        const rng = this.mulberry32(seed);
+
+        // Fisher-Yates 洗牌演算法：從基礎排列生成隨機置換
+        const shuffled = [...this.perm];
+        for (let i = shuffled.length - 1; i > 0; i--) {
+            const j = Math.floor(rng() * (i + 1));
+            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+
+        // 填充置換表（雙倍長度以避免溢位檢查）
         for (let i = 0; i < 256; i++) {
-            this.p[256 + i] = this.p[i] = this.perm[(i + seed) % 256];
+            this.p[256 + i] = this.p[i] = shuffled[i];
         }
     }
 

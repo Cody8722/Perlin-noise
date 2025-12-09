@@ -144,9 +144,20 @@ export function getTemperature(x, y) {
  * @returns {{height: number, moisture: number, temperature: number}} 地形資料
  */
 export function getTerrainData(index) {
+    // 邊界檢查：防止訪問無效索引
+    const maxIndex = MAP_CONFIG.width * MAP_CONFIG.height;
+    if (index < 0 || index >= maxIndex) {
+        console.warn(`getTerrainData: 索引 ${index} 超出範圍 [0, ${maxIndex})`);
+        return {
+            height: 0,
+            moisture: 0,
+            temperature: 0.5
+        };
+    }
+
     return {
-        height: mapData.height[index],
-        moisture: mapData.moisture[index],
-        temperature: mapData.temperature[index]
+        height: mapData.height[index] || 0,
+        moisture: mapData.moisture[index] || 0,
+        temperature: mapData.temperature[index] || 0.5
     };
 }
