@@ -4,7 +4,7 @@
  */
 
 import { MAP_CONFIG, terrainConfig, updateConfig, generateNewSeed, setSeed, getBiomeName } from './config.js';
-import { generateTerrain, getTerrainData } from './terrain.js';
+import { generateTerrain, getTerrainData, generateRivers } from './terrain.js';
 import { renderTerrain, toggleClouds, setRenderMode, getRenderMode } from './renderer.js';
 
 // 防抖計時器
@@ -135,7 +135,35 @@ export function initUI() {
     bindSlider('inp_octaves', 'val_octaves', 'octaves', false);
     bindSlider('inp_sea', 'val_sea', 'seaLevel', true);
     bindSlider('inp_moist', 'val_moist', 'moistureOffset', true);
-    bindSlider('inp_temp', 'val_temp', 'temperatureOffset', true);  // 新增：溫度偏移
+    bindSlider('inp_temp', 'val_temp', 'temperatureOffset', true);  // 溫度偏移
+
+    // Phase 8: 綁定河流控制滑桿
+    bindSlider('inp_river_density', 'val_river_density', 'riverDensity', false);
+
+    // 河流顯示閾值（更新後僅重繪，不重新生成）
+    const riverThresholdInput = document.getElementById('inp_river_threshold');
+    const riverThresholdDisplay = document.getElementById('val_river_threshold');
+    riverThresholdInput.addEventListener('input', () => {
+        const value = parseInt(riverThresholdInput.value);
+        updateConfig('riverThreshold', value);
+        riverThresholdDisplay.textContent = value;
+        // 僅重繪，不重新生成河流
+        renderTerrain();
+    });
+
+    // 綁定生成河流按鈕
+    const generateRiversBtn = document.getElementById('btnGenerateRivers');
+    generateRiversBtn.addEventListener('click', () => {
+        generateRivers(terrainConfig.riverDensity);
+        renderTerrain();
+
+        // 視覺回饋
+        const originalText = generateRiversBtn.textContent;
+        generateRiversBtn.textContent = '✅ 河流已生成！';
+        setTimeout(() => {
+            generateRiversBtn.textContent = originalText;
+        }, 1500);
+    });
 
     // 綁定雲層切換
     const cloudCheckbox = document.getElementById('chk_clouds');
@@ -207,7 +235,7 @@ function initExportButton() {
  * 初始化視圖模式切換按鈕
  */
 function initViewModeButtons() {
-    const modes = ['biome', 'height', 'moisture', 'temperature'];
+    const modes = ['biome', 'height', 'moisture', 'temperature', 'flux'];  // Phase 8: 新增 flux
 
     modes.forEach(mode => {
         const button = document.getElementById(`btn_${mode}`);
@@ -263,7 +291,7 @@ function initMapHover() {
         // 檢查座標是否有效
         if (x >= 0 && x < MAP_CONFIG.width && y >= 0 && y < MAP_CONFIG.height) {
             const index = y * MAP_CONFIG.width + x;
-            const { height, moisture, temperature } = getTerrainData(index);
+            const { height, moisture, temperature, flux } = getTerrainData(index);
 
             // 顯示詳細資訊（多行格式）
             const biomeName = getBiomeName(height, moisture, temperature);
@@ -271,14 +299,21 @@ function initMapHover() {
 
             // 根據當前視圖模式調整顯示格式
             if (renderMode === 'biome') {
-                // 生物群系模式：顯示完整資訊
+                // 生物群系模式：顯示完整資訊（包含河流）
+                const fluxInfo = flux >= terrainConfig.riverThreshold ? ` | 水流: ${flux.toFixed(0)}` : '';
                 hud.innerHTML = `
                     <div><strong>${biomeName}</strong></div>
                     <div>高度: ${height.toFixed(2)} | 濕度: ${moisture.toFixed(2)}</div>
-                    <div>溫度: ${temperature.toFixed(2)}</div>
+                    <div>溫度: ${temperature.toFixed(2)}${fluxInfo}</div>
+                `;
+            } else if (renderMode === 'flux') {
+                // Phase 8: 水流模式
+                hud.innerHTML = `
+                    <div><strong>水流累積: ${flux.toFixed(0)}</strong></div>
+                    <div style="font-size:0.85em; opacity:0.7;">H:${height.toFixed(2)} M:${moisture.toFixed(2)} T:${temperature.toFixed(2)}</div>
                 `;
             } else {
-                // 熱力圖模式：強調當前視圖的數據
+                // 其他熱力圖模式：強調當前視圖的數據
                 const modeLabels = {
                     height: '高度',
                     moisture: '濕度',

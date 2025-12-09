@@ -16,7 +16,9 @@ export const terrainConfig = {
     octaves: 5,
     seaLevel: 0.35,
     moistureOffset: 0,
-    temperatureOffset: 0  // 新增：溫度偏移（-0.5 到 0.5，模擬冰河期/暖化）
+    temperatureOffset: 0,   // 溫度偏移（-0.5 到 0.5，模擬冰河期/暖化）
+    riverDensity: 10000,    // Phase 8: 河流密度（水滴數量，1000-50000）
+    riverThreshold: 5       // Phase 8: 河流顯示閾值（最小 flux 值）
 };
 
 // 生物群系顏色配置（Whittaker 分類系統擴展）

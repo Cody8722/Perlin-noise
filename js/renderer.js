@@ -12,7 +12,7 @@ let terrainCanvas, terrainCtx;
 let cloudCanvas, cloudCtx;
 
 // 當前渲染模式
-let currentRenderMode = 'biome';  // 'biome', 'height', 'moisture', 'temperature'
+let currentRenderMode = 'biome';  // 'biome', 'height', 'moisture', 'temperature', 'flux'
 
 /**
  * 初始化渲染器
@@ -27,10 +27,10 @@ export function initRenderer() {
 
 /**
  * 設定渲染模式
- * @param {string} mode - 渲染模式 ('biome', 'height', 'moisture', 'temperature')
+ * @param {string} mode - 渲染模式 ('biome', 'height', 'moisture', 'temperature', 'flux')
  */
 export function setRenderMode(mode) {
-    if (['biome', 'height', 'moisture', 'temperature'].includes(mode)) {
+    if (['biome', 'height', 'moisture', 'temperature', 'flux'].includes(mode)) {
         currentRenderMode = mode;
     }
 }
@@ -95,6 +95,24 @@ function temperatureGradient(value) {
 }
 
 /**
+ * 顏色生成輔助函數：水流累積量梯度（白色到深藍色）
+ * Phase 8: 河流視覺化
+ * @param {number} value - 0-1 的正規化 flux 值
+ * @returns {Array<number>} RGB 陣列
+ */
+function fluxGradient(value) {
+    // 白色 (無水流) → 淺藍 → 深藍 (河流)
+    // 使用對數縮放來強調河流
+    const intensity = Math.pow(value, 0.3);  // 使用指數壓縮讓小河流更明顯
+
+    const r = Math.floor((1 - intensity) * 255);
+    const g = Math.floor((1 - intensity * 0.6) * 255);
+    const b = Math.floor(200 + intensity * 55);  // 保持偏藍色調
+
+    return [r, g, b];
+}
+
+/**
  * 渲染地形到 Canvas
  * 根據當前渲染模式選擇不同的視覺化方式
  */
@@ -102,12 +120,19 @@ export function renderTerrain() {
     const imgData = terrainCtx.createImageData(MAP_CONFIG.width, MAP_CONFIG.height);
     const data = imgData.data;
 
+    // Phase 8: 計算最大 flux 值用於正規化
+    let maxFlux = 1;
+    if (currentRenderMode === 'flux' || currentRenderMode === 'biome') {
+        maxFlux = Math.max(1, ...mapData.flux);  // 防止除以 0
+    }
+
     for (let y = 0; y < MAP_CONFIG.height; y++) {
         for (let x = 0; x < MAP_CONFIG.width; x++) {
             const index = y * MAP_CONFIG.width + x;
             const height = mapData.height[index];
             const moisture = mapData.moisture[index];
             const temperature = mapData.temperature[index];
+            const flux = mapData.flux[index];
 
             let color;
 
@@ -128,10 +153,27 @@ export function renderTerrain() {
                     color = temperatureGradient(temperature);
                     break;
 
+                case 'flux':
+                    // Phase 8: 水流累積量熱力圖
+                    const normalizedFlux = flux / maxFlux;
+                    color = fluxGradient(normalizedFlux);
+                    break;
+
                 case 'biome':
                 default:
                     // 生物群系視圖（預設）
                     color = getBiomeColor(height, moisture, temperature);
+
+                    // Phase 8: 在生物群系模式疊加河流
+                    if (flux >= terrainConfig.riverThreshold && height > terrainConfig.seaLevel) {
+                        // 河流顏色：深藍色 (40, 80, 140)
+                        const riverIntensity = Math.min(1, flux / (maxFlux * 0.3));  // 使用 30% 的 maxFlux 作為飽和點
+                        color = [
+                            Math.floor(color[0] * (1 - riverIntensity * 0.8) + 40 * riverIntensity),
+                            Math.floor(color[1] * (1 - riverIntensity * 0.8) + 80 * riverIntensity),
+                            Math.floor(color[2] * (1 - riverIntensity * 0.8) + 140 * riverIntensity)
+                        ];
+                    }
                     break;
             }
 

@@ -44,6 +44,7 @@
                     <button id="btn_height" class="view-btn">🏔️ 高度</button>
                     <button id="btn_moisture" class="view-btn">💧 濕度</button>
                     <button id="btn_temperature" class="view-btn">🌡️ 溫度</button>
+                    <button id="btn_flux" class="view-btn">🌊 水流</button>
                 </div>
             </div>
 
@@ -68,6 +69,20 @@
 
                 <label>🌡️ 溫度 (冰河期 ↔ 暖化) <span id="val_temp" class="val">0</span></label>
                 <input type="range" id="inp_temp" min="-0.5" max="0.5" step="0.05" value="0">
+            </div>
+
+            <div class="control-group">
+                <span class="group-title">🌊 河流系統 (Phase 8)</span>
+
+                <label>河流密度 (水滴數) <span id="val_river_density" class="val">10000</span></label>
+                <input type="range" id="inp_river_density" min="1000" max="50000" step="1000" value="10000">
+
+                <label>河流顯示閾值 <span id="val_river_threshold" class="val">5</span></label>
+                <input type="range" id="inp_river_threshold" min="1" max="50" step="1" value="5">
+
+                <button id="btnGenerateRivers" class="view-btn" style="margin-top: 10px; width: 100%;">
+                    🌊 生成河流網絡
+                </button>
             </div>
 
             <div class="control-group">
