@@ -148,6 +148,29 @@ function init() {
     // 5. 執行 Golden Master 回歸測試
     console.log('');
     runGoldenMaster();
+
+    // 6. 暴露測試 API 到全域作用域（僅用於 UI 測試）
+    exposeTestAPIs();
+}
+
+/**
+ * 暴露必要的 API 給 UI 測試機器人使用
+ * 注意：僅在開發/測試環境使用
+ */
+function exposeTestAPIs() {
+    if (!window.RPGWorldGen) {
+        window.RPGWorldGen = {};
+    }
+
+    // 暴露配置物件
+    window.terrainConfig = terrainConfig;
+
+    // 暴露常用函數（可選）
+    window.RPGWorldGen.config = terrainConfig;
+    window.RPGWorldGen.generateTerrain = generateTerrain;
+    window.RPGWorldGen.renderAll = renderAll;
+
+    console.log('🔧 測試 API 已暴露到全域作用域');
 }
 
 // 等待 DOM 載入完成後執行
