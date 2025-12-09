@@ -112,6 +112,24 @@ export function initUI() {
         });
     });
 
+    // 綁定隨機種子按鈕
+    const randomSeedBtn = document.getElementById('btnRandomSeed');
+    randomSeedBtn.addEventListener('click', () => {
+        // 清空輸入欄位
+        seedInput.value = '';
+        // 生成隨機種子
+        generateNewSeed();
+        generateTerrain();
+        renderTerrain();
+        updateSeedDisplay();
+
+        // 視覺回饋
+        randomSeedBtn.textContent = '✨';
+        setTimeout(() => {
+            randomSeedBtn.textContent = '🎲';
+        }, 500);
+    });
+
     // 綁定滑桿
     bindSlider('inp_scale', 'val_scale', 'scale', false);
     bindSlider('inp_octaves', 'val_octaves', 'octaves', false);
