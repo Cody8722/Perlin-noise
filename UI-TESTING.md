@@ -15,21 +15,41 @@
 3. 在 Console 中執行以下腳本：
 
 ```javascript
-// 方法 A：直接載入腳本
-const script = document.createElement('script');
-script.src = 'js/ui-test-bot.js';
-document.body.appendChild(script);
+// 方法 A：動態載入腳本（推薦）
+(function() {
+    // 檢查是否已載入
+    if (window.UITestBot?.loaded) {
+        console.log('✅ 測試機器人已載入，直接執行測試');
+        runUITests();
+        return;
+    }
 
-// 等待載入後執行
-setTimeout(() => runUITests(), 1000);
+    // 載入測試腳本
+    const script = document.createElement('script');
+    script.src = 'js/ui-test-bot.js';
+    script.onload = () => {
+        console.log('✅ 腳本載入完成，開始執行測試...');
+        setTimeout(() => runUITests(), 500);
+    };
+    script.onerror = () => {
+        console.error('❌ 無法載入測試腳本，請確認路徑正確');
+    };
+    document.body.appendChild(script);
+})();
 ```
 
 或
 
 ```javascript
-// 方法 B：直接貼上整個 js/ui-test-bot.js 的內容到 Console
-// 然後執行
-runUITests();
+// 方法 B：簡化版（適合重複執行）
+if (!window.UITestBot?.loaded) {
+    const s = document.createElement('script');
+    s.src = 'js/ui-test-bot.js';
+    s.onload = () => setTimeout(runUITests, 500);
+    document.body.append(s);
+} else {
+    runUITests();
+}
 ```
 
 ### 方法 2：修改 HTML（開發模式）

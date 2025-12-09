@@ -136,11 +136,19 @@ function assertCanvasUpdated() {
 // 測試套件
 // ============================================
 
-const testResults = {
+// 使用 window 物件避免重複宣告錯誤
+if (!window.UITestBot) {
+    window.UITestBot = {};
+}
+
+window.UITestBot.testResults = {
     passed: 0,
     failed: 0,
     tests: []
 };
+
+// 簡寫別名
+const testResults = window.UITestBot.testResults;
 
 async function runTest(name, testFn) {
     console.log(`\n🧪 執行測試: ${name}`);
@@ -517,7 +525,14 @@ async function runUITests() {
 }
 
 // 匯出給瀏覽器 Console 使用
-window.runUITests = runUITests;
+window.UITestBot.runUITests = runUITests;
+window.runUITests = runUITests; // 簡寫別名
 
-console.log('✅ UI 測試機器人已載入');
-console.log('執行測試請輸入: runUITests()');
+// 防止重複載入
+if (window.UITestBot.loaded) {
+    console.warn('⚠️  UI 測試機器人已經載入過，將使用現有版本');
+} else {
+    window.UITestBot.loaded = true;
+    console.log('✅ UI 測試機器人已載入');
+    console.log('執行測試請輸入: runUITests()');
+}
