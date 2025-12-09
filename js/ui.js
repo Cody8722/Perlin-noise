@@ -166,18 +166,30 @@ export function initUI() {
         updateConfig('useAdvancedIrrigation', advancedIrrigationCheckbox.checked);
     });
 
-    // 綁定生成河流按鈕（Phase 9: 加入生態回饋）
+    // 綁定生成河流按鈕（Phase 9.5: 加入生態回饋 + 平滑）
     const generateRiversBtn = document.getElementById('btnGenerateRivers');
     generateRiversBtn.addEventListener('click', () => {
         // Step 1: 生成河流網絡
         generateRivers(terrainConfig.riverDensity);
 
-        // Step 2: Phase 9 - 應用水文回饋到濕度層
+        // Step 2: Phase 9.5 - 應用水文回饋到濕度層（帶平滑）
         if (terrainConfig.irrigationStrength > 0) {
+            // 使用 riverThreshold 作為 fluxThreshold（過濾小支流）
+            const fluxThreshold = Math.max(3, terrainConfig.riverThreshold);
+
             if (terrainConfig.useAdvancedIrrigation) {
-                applyHydrologyToMoistureAdvanced(terrainConfig.irrigationStrength, 1);
+                // 進階版：擴散 + 距離衰減 + 平滑
+                applyHydrologyToMoistureAdvanced(
+                    terrainConfig.irrigationStrength,
+                    2,  // spreadRadius = 2（較寬的河岸綠帶）
+                    fluxThreshold
+                );
             } else {
-                applyHydrologyToMoisture(terrainConfig.irrigationStrength);
+                // 基礎版：3x3 高斯平滑
+                applyHydrologyToMoisture(
+                    terrainConfig.irrigationStrength,
+                    fluxThreshold
+                );
             }
         }
 

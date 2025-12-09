@@ -324,29 +324,80 @@ function simulateDroplet(startX, startY) {
  */
 
 /**
- * 應用水文系統對濕度的影響
+ * 應用水文系統對濕度的影響（Phase 9.5: 修復碎片化）
  * 河流會增加周圍土地的濕度，改變生物群系
  *
+ * 改進：
+ * 1. 閾值過濾：忽略不重要的小支流（flux < fluxThreshold）
+ * 2. 空間平滑：濕度擴散到周圍像素，創造平滑過渡
+ *
  * @param {number} strength - 灌溉強度（0.0-5.0，建議 1.0）
+ * @param {number} fluxThreshold - Flux 閾值（預設 3，低於此值的支流不影響濕度）
  */
-export function applyHydrologyToMoisture(strength = 1.0) {
-    console.log(`💧 應用水文回饋到濕度層（強度: ${strength.toFixed(2)}）...`);
+export function applyHydrologyToMoisture(strength = 1.0, fluxThreshold = 3) {
+    console.log(`💧 應用水文回饋到濕度層（強度: ${strength.toFixed(2)}, 閾值: ${fluxThreshold}）...`);
     const startTime = performance.now();
 
     let affectedPixels = 0;
 
-    // Phase 9.1: 基礎版本 - 直接影響河流像素
+    // Phase 9.5: 創建臨時濕度增量地圖（防止覆蓋）
+    const moistureBonus = new Float32Array(mapData.moisture.length);
+
+    // Step 1: 計算每個河流像素的濕度貢獻（閾值過濾）
     for (let i = 0; i < mapData.flux.length; i++) {
         const flux = mapData.flux[i];
 
-        if (flux > 0) {
-            // 計算濕度獎勵（基於水流量和強度）
-            // 公式：flux 越高，濕度增加越多，但有上限
+        // 閾值過濾：忽略小支流
+        if (flux >= fluxThreshold) {
+            // 計算濕度獎勵
             const bonus = Math.min(0.5, flux * strength * 0.005);
 
-            // 應用到濕度（確保不超過 [0, 1] 範圍）
+            // 主像素獲得 100% 獎勵
+            moistureBonus[i] += bonus;
+        }
+    }
+
+    // Step 2: 空間平滑 - 3x3 鄰居平均（高斯模糊簡化版）
+    const smoothed = new Float32Array(moistureBonus.length);
+
+    // 高斯核權重（3x3，歸一化）
+    const kernel = [
+        0.077, 0.123, 0.077,   // 上排
+        0.123, 0.200, 0.123,   // 中排（中心權重最高）
+        0.077, 0.123, 0.077    // 下排
+    ];
+
+    for (let y = 0; y < MAP_CONFIG.height; y++) {
+        for (let x = 0; x < MAP_CONFIG.width; x++) {
+            const index = y * MAP_CONFIG.width + x;
+            let weightedSum = 0;
+
+            // 遍歷 3x3 鄰居
+            let kernelIndex = 0;
+            for (let dy = -1; dy <= 1; dy++) {
+                for (let dx = -1; dx <= 1; dx++) {
+                    const nx = x + dx;
+                    const ny = y + dy;
+
+                    // 邊界檢查
+                    if (nx >= 0 && nx < MAP_CONFIG.width && ny >= 0 && ny < MAP_CONFIG.height) {
+                        const neighborIndex = ny * MAP_CONFIG.width + nx;
+                        weightedSum += moistureBonus[neighborIndex] * kernel[kernelIndex];
+                    }
+
+                    kernelIndex++;
+                }
+            }
+
+            smoothed[index] = weightedSum;
+        }
+    }
+
+    // Step 3: 應用平滑後的濕度增量到實際 moisture 陣列
+    for (let i = 0; i < mapData.moisture.length; i++) {
+        if (smoothed[i] > 0.001) {  // 忽略微小增量
             const oldMoisture = mapData.moisture[i];
-            mapData.moisture[i] = Math.min(1.0, oldMoisture + bonus);
+            mapData.moisture[i] = Math.min(1.0, oldMoisture + smoothed[i]);
 
             if (mapData.moisture[i] > oldMoisture) {
                 affectedPixels++;
@@ -355,20 +406,21 @@ export function applyHydrologyToMoisture(strength = 1.0) {
     }
 
     const endTime = performance.now();
-    console.log(`✅ 水文回饋應用完成！`);
+    console.log(`✅ 水文回饋應用完成（平滑版）！`);
     console.log(`   - 影響像素: ${affectedPixels}`);
     console.log(`   - 執行時間: ${(endTime - startTime).toFixed(2)} ms`);
 }
 
 /**
- * 應用水文系統對濕度的影響（進階版：包含擴散效果）
- * 河流會增加周圍土地的濕度，創造更寬的河岸綠帶
+ * 應用水文系統對濕度的影響（進階版：包含擴散效果 + 平滑）
+ * Phase 9.5: 修復碎片化，創造更寬且平滑的河岸綠帶
  *
  * @param {number} strength - 灌溉強度（0.0-5.0）
- * @param {number} spreadRadius - 擴散半徑（預設 1 = 4 方向鄰居）
+ * @param {number} spreadRadius - 擴散半徑（1 = 4 方向，2 = 8 方向加強）
+ * @param {number} fluxThreshold - Flux 閾值（預設 3）
  */
-export function applyHydrologyToMoistureAdvanced(strength = 1.0, spreadRadius = 1) {
-    console.log(`💧 應用水文回饋到濕度層（強度: ${strength.toFixed(2)}, 擴散半徑: ${spreadRadius}）...`);
+export function applyHydrologyToMoistureAdvanced(strength = 1.0, spreadRadius = 1, fluxThreshold = 3) {
+    console.log(`💧 應用水文回饋到濕度層（強度: ${strength.toFixed(2)}, 擴散: ${spreadRadius}, 閾值: ${fluxThreshold}）...`);
     const startTime = performance.now();
 
     let affectedPixels = 0;
@@ -376,40 +428,43 @@ export function applyHydrologyToMoistureAdvanced(strength = 1.0, spreadRadius = 
     // 創建臨時陣列儲存濕度增量（避免覆蓋原始值）
     const moistureBonus = new Float32Array(mapData.moisture.length);
 
-    // Phase 9.2: 進階版本 - 河流影響 + 擴散到鄰居
+    // Phase 9.5: 河流影響 + 擴散 + 閾值過濾
     for (let y = 0; y < MAP_CONFIG.height; y++) {
         for (let x = 0; x < MAP_CONFIG.width; x++) {
             const index = y * MAP_CONFIG.width + x;
             const flux = mapData.flux[index];
 
-            if (flux > 0) {
+            // 閾值過濾：忽略小支流
+            if (flux >= fluxThreshold) {
                 // 主河道濕度獎勵
                 const mainBonus = Math.min(0.5, flux * strength * 0.005);
                 moistureBonus[index] += mainBonus;
 
-                // 擴散到鄰居（4 方向或 8 方向）
-                const neighbors = spreadRadius === 1
-                    ? [{ dx: 0, dy: -1 }, { dx: -1, dy: 0 }, { dx: 1, dy: 0 }, { dx: 0, dy: 1 }]  // 4 方向
-                    : [  // 8 方向
-                        { dx: -1, dy: -1 }, { dx: 0, dy: -1 }, { dx: 1, dy: -1 },
-                        { dx: -1, dy: 0 },                      { dx: 1, dy: 0 },
-                        { dx: -1, dy: 1 },  { dx: 0, dy: 1 },  { dx: 1, dy: 1 }
-                    ];
+                // 擴散到鄰居（距離衰減）
+                const maxSpread = spreadRadius + 1;  // 擴散範圍
 
-                for (const { dx, dy } of neighbors) {
-                    const nx = x + dx;
-                    const ny = y + dy;
+                for (let dy = -maxSpread; dy <= maxSpread; dy++) {
+                    for (let dx = -maxSpread; dx <= maxSpread; dx++) {
+                        if (dx === 0 && dy === 0) continue;  // 跳過中心點
 
-                    // 邊界檢查
-                    if (nx >= 0 && nx < MAP_CONFIG.width && ny >= 0 && ny < MAP_CONFIG.height) {
-                        const neighborIndex = ny * MAP_CONFIG.width + nx;
-                        const height = mapData.height[neighborIndex];
+                        const nx = x + dx;
+                        const ny = y + dy;
 
-                        // 僅影響陸地（不影響海洋）
-                        if (height > terrainConfig.seaLevel) {
-                            // 鄰居獲得較弱的濕度獎勵（50% 強度）
-                            const spreadBonus = mainBonus * 0.5;
-                            moistureBonus[neighborIndex] += spreadBonus;
+                        // 邊界檢查
+                        if (nx >= 0 && nx < MAP_CONFIG.width && ny >= 0 && ny < MAP_CONFIG.height) {
+                            const neighborIndex = ny * MAP_CONFIG.width + nx;
+                            const height = mapData.height[neighborIndex];
+
+                            // 僅影響陸地
+                            if (height > terrainConfig.seaLevel) {
+                                // 距離衰減：越遠影響越弱
+                                const distance = Math.sqrt(dx * dx + dy * dy);
+                                const falloff = Math.max(0, 1 - distance / (maxSpread + 1));
+
+                                // 鄰居獲得衰減後的濕度獎勵
+                                const spreadBonus = mainBonus * falloff * 0.5;
+                                moistureBonus[neighborIndex] += spreadBonus;
+                            }
                         }
                     }
                 }
@@ -417,11 +472,42 @@ export function applyHydrologyToMoistureAdvanced(strength = 1.0, spreadRadius = 
         }
     }
 
+    // Phase 9.5: 再次平滑（防止階梯效應）
+    const smoothed = new Float32Array(moistureBonus.length);
+
+    // 簡化版 3x3 平滑
+    for (let y = 0; y < MAP_CONFIG.height; y++) {
+        for (let x = 0; x < MAP_CONFIG.width; x++) {
+            const index = y * MAP_CONFIG.width + x;
+            let sum = moistureBonus[index] * 0.4;  // 中心權重 40%
+            let count = 0.4;
+
+            // 4 方向鄰居
+            const neighbors = [
+                { dx: 0, dy: -1 }, { dx: -1, dy: 0 },
+                { dx: 1, dy: 0 },  { dx: 0, dy: 1 }
+            ];
+
+            for (const { dx, dy } of neighbors) {
+                const nx = x + dx;
+                const ny = y + dy;
+
+                if (nx >= 0 && nx < MAP_CONFIG.width && ny >= 0 && ny < MAP_CONFIG.height) {
+                    const neighborIndex = ny * MAP_CONFIG.width + nx;
+                    sum += moistureBonus[neighborIndex] * 0.15;  // 鄰居權重 15% 各
+                    count += 0.15;
+                }
+            }
+
+            smoothed[index] = sum / count;
+        }
+    }
+
     // 應用濕度增量到實際 moisture 陣列
     for (let i = 0; i < mapData.moisture.length; i++) {
-        if (moistureBonus[i] > 0) {
+        if (smoothed[i] > 0.001) {
             const oldMoisture = mapData.moisture[i];
-            mapData.moisture[i] = Math.min(1.0, oldMoisture + moistureBonus[i]);
+            mapData.moisture[i] = Math.min(1.0, oldMoisture + smoothed[i]);
 
             if (mapData.moisture[i] > oldMoisture) {
                 affectedPixels++;
@@ -430,7 +516,7 @@ export function applyHydrologyToMoistureAdvanced(strength = 1.0, spreadRadius = 
     }
 
     const endTime = performance.now();
-    console.log(`✅ 水文回饋應用完成！`);
+    console.log(`✅ 水文回饋應用完成（進階平滑版）！`);
     console.log(`   - 影響像素: ${affectedPixels}`);
     console.log(`   - 執行時間: ${(endTime - startTime).toFixed(2)} ms`);
 }
