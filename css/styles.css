@@ -236,15 +236,28 @@ input[type=range]::-moz-range-thumb {
     position: absolute;
     bottom: 10px;
     left: 10px;
-    background: rgba(0,0,0,0.8);
-    padding: 4px 8px;
-    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.9);
+    padding: 8px 12px;
+    border-radius: 6px;
     color: var(--accent);
-    font-size: 12px;
+    font-size: 11px;
+    line-height: 1.5;
     pointer-events: none;
     font-family: monospace;
     opacity: 0;
-    transition: opacity 0.2s;
+    transition: opacity 0.15s;
+    border: 1px solid rgba(105, 240, 174, 0.3);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+    min-width: 200px;
+}
+
+.hud div {
+    margin: 2px 0;
+}
+
+.hud strong {
+    color: var(--accent);
+    font-weight: bold;
 }
 
 /* ===== 視圖模式按鈕 ===== */
@@ -282,4 +295,109 @@ input[type=range]::-moz-range-thumb {
 
 .view-btn:active {
     transform: scale(0.98);
+}
+
+/* ===== 種子控制區域 ===== */
+.seed-control {
+    background: rgba(105, 240, 174, 0.1);
+    border: 1px solid rgba(105, 240, 174, 0.3);
+}
+
+.seed-control label {
+    font-weight: bold;
+    color: var(--accent);
+    margin-bottom: 10px;
+}
+
+.seed-input-wrapper {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.seed-input-wrapper input[type="text"] {
+    flex: 1;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid #444;
+    color: var(--text);
+    padding: 10px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-family: monospace;
+    transition: border-color 0.2s;
+}
+
+.seed-input-wrapper input[type="text"]:focus {
+    outline: none;
+    border-color: var(--accent);
+    background: rgba(0, 0, 0, 0.6);
+}
+
+.seed-input-wrapper input[type="text"]::placeholder {
+    color: #666;
+}
+
+.seed-input-wrapper button {
+    flex-shrink: 0;
+    padding: 10px 20px;
+    width: auto;
+}
+
+.seed-display {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    color: #aaa;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 8px 12px;
+    border-radius: 4px;
+}
+
+.seed-display span {
+    color: var(--accent);
+    font-family: monospace;
+    font-weight: bold;
+    flex: 1;
+}
+
+.copy-btn {
+    padding: 4px 10px;
+    font-size: 0.9rem;
+    width: auto;
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text);
+    min-width: 40px;
+}
+
+.copy-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+/* ===== 匯出控制區域 ===== */
+.export-control {
+    background: rgba(105, 240, 174, 0.08);
+    border: 1px solid rgba(105, 240, 174, 0.2);
+}
+
+.export-btn {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    font-weight: bold;
+    padding: 14px;
+    width: 100%;
+    transition: all 0.2s;
+}
+
+.export-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.export-info {
+    margin-top: 8px;
+    font-size: 0.8rem;
+    color: #888;
+    text-align: center;
+    font-style: italic;
 }

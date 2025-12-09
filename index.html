@@ -23,7 +23,18 @@
 
         <!-- 右/下：控制區 -->
         <div class="controls-area">
-            <button id="btnGenerate">🎲 生成新世界</button>
+            <!-- 種子控制區 -->
+            <div class="control-group seed-control">
+                <label for="inp_seed">🌱 世界種子</label>
+                <div class="seed-input-wrapper">
+                    <input type="text" id="inp_seed" placeholder="輸入種子或留空隨機生成">
+                    <button id="btnGenerate">生成</button>
+                </div>
+                <div class="seed-display">
+                    當前種子: <span id="current_seed">0</span>
+                    <button id="btnCopySeed" class="copy-btn" title="複製種子">📋</button>
+                </div>
+            </div>
 
             <div class="control-group">
                 <span class="group-title">視圖模式</span>
@@ -63,6 +74,14 @@
                     <input type="checkbox" id="chk_clouds" checked>
                     ☁️ 顯示動態雲層
                 </label>
+            </div>
+
+            <!-- 匯出控制區 -->
+            <div class="control-group export-control">
+                <button id="btnExport" class="export-btn">📷 匯出地圖 (PNG)</button>
+                <div class="export-info">
+                    下載檔名會包含種子編號
+                </div>
             </div>
 
             <div class="control-group legend-group">

@@ -197,8 +197,50 @@ export function updateConfig(key, value) {
 }
 
 /**
+ * 簡單的字串雜湊函數（將文字轉換為數字種子）
+ * 使用 djb2 演算法的變體
+ * @param {string} str - 輸入字串
+ * @returns {number} 雜湊值（正整數）
+ */
+export function hashString(str) {
+    let hash = 5381;
+    for (let i = 0; i < str.length; i++) {
+        hash = ((hash << 5) + hash) + str.charCodeAt(i); // hash * 33 + c
+    }
+    return Math.abs(hash) % 100000; // 限制在 0-99999 範圍
+}
+
+/**
+ * 設定種子（支援數字或字串）
+ * @param {string|number} input - 種子輸入（可以是數字或字串）
+ * @returns {number} 實際使用的種子值
+ */
+export function setSeed(input) {
+    if (typeof input === 'string') {
+        input = input.trim();
+        if (input === '') {
+            // 空字串：生成隨機種子
+            terrainConfig.seed = Math.floor(Math.random() * 10000);
+        } else if (/^\d+$/.test(input)) {
+            // 純數字字串：直接使用
+            terrainConfig.seed = parseInt(input, 10);
+        } else {
+            // 文字字串：雜湊為數字
+            terrainConfig.seed = hashString(input);
+        }
+    } else if (typeof input === 'number') {
+        terrainConfig.seed = Math.floor(input);
+    } else {
+        // 無效輸入：生成隨機種子
+        terrainConfig.seed = Math.floor(Math.random() * 10000);
+    }
+    return terrainConfig.seed;
+}
+
+/**
  * 生成新的隨機種子
  */
 export function generateNewSeed() {
     terrainConfig.seed = Math.floor(Math.random() * 10000);
+    return terrainConfig.seed;
 }
