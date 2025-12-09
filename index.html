@@ -72,7 +72,7 @@
             </div>
 
             <div class="control-group">
-                <span class="group-title">🌊 河流系統 (Phase 8)</span>
+                <span class="group-title">🌊 河流系統 (Phase 8 + 9)</span>
 
                 <label>河流密度 (水滴數) <span id="val_river_density" class="val">10000</span></label>
                 <input type="range" id="inp_river_density" min="1000" max="50000" step="1000" value="10000">
@@ -80,8 +80,16 @@
                 <label>河流顯示閾值 <span id="val_river_threshold" class="val">5</span></label>
                 <input type="range" id="inp_river_threshold" min="1" max="50" step="1" value="5">
 
+                <label>💧 灌溉強度（尼羅河效應） <span id="val_irrigation" class="val">1.0</span></label>
+                <input type="range" id="inp_irrigation" min="0" max="5" step="0.1" value="1.0">
+
+                <label style="justify-content: flex-start; gap: 10px; margin: 8px 0; font-size: 0.9em;">
+                    <input type="checkbox" id="chk_advanced_irrigation" checked>
+                    ✨ 進階模式（擴散到河岸）
+                </label>
+
                 <button id="btnGenerateRivers" class="view-btn" style="margin-top: 10px; width: 100%;">
-                    🌊 生成河流網絡
+                    🌊 生成河流網絡 + 生態回饋
                 </button>
             </div>
 

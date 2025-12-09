@@ -4,7 +4,7 @@
  */
 
 import { MAP_CONFIG, terrainConfig, updateConfig, generateNewSeed, setSeed, getBiomeName } from './config.js';
-import { generateTerrain, getTerrainData, generateRivers } from './terrain.js';
+import { generateTerrain, getTerrainData, generateRivers, applyHydrologyToMoisture, applyHydrologyToMoistureAdvanced } from './terrain.js';
 import { renderTerrain, toggleClouds, setRenderMode, getRenderMode } from './renderer.js';
 
 // 防抖計時器
@@ -151,15 +151,42 @@ export function initUI() {
         renderTerrain();
     });
 
-    // 綁定生成河流按鈕
+    // Phase 9: 綁定灌溉強度滑桿
+    const irrigationInput = document.getElementById('inp_irrigation');
+    const irrigationDisplay = document.getElementById('val_irrigation');
+    irrigationInput.addEventListener('input', () => {
+        const value = parseFloat(irrigationInput.value);
+        updateConfig('irrigationStrength', value);
+        irrigationDisplay.textContent = value.toFixed(1);
+    });
+
+    // Phase 9: 綁定進階灌溉模式 checkbox
+    const advancedIrrigationCheckbox = document.getElementById('chk_advanced_irrigation');
+    advancedIrrigationCheckbox.addEventListener('change', () => {
+        updateConfig('useAdvancedIrrigation', advancedIrrigationCheckbox.checked);
+    });
+
+    // 綁定生成河流按鈕（Phase 9: 加入生態回饋）
     const generateRiversBtn = document.getElementById('btnGenerateRivers');
     generateRiversBtn.addEventListener('click', () => {
+        // Step 1: 生成河流網絡
         generateRivers(terrainConfig.riverDensity);
+
+        // Step 2: Phase 9 - 應用水文回饋到濕度層
+        if (terrainConfig.irrigationStrength > 0) {
+            if (terrainConfig.useAdvancedIrrigation) {
+                applyHydrologyToMoistureAdvanced(terrainConfig.irrigationStrength, 1);
+            } else {
+                applyHydrologyToMoisture(terrainConfig.irrigationStrength);
+            }
+        }
+
+        // Step 3: 重繪地形（生物群系會根據新的濕度改變）
         renderTerrain();
 
         // 視覺回饋
         const originalText = generateRiversBtn.textContent;
-        generateRiversBtn.textContent = '✅ 河流已生成！';
+        generateRiversBtn.textContent = '✅ 河流 + 生態已生成！';
         setTimeout(() => {
             generateRiversBtn.textContent = originalText;
         }, 1500);

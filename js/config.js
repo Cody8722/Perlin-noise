@@ -16,9 +16,11 @@ export const terrainConfig = {
     octaves: 5,
     seaLevel: 0.35,
     moistureOffset: 0,
-    temperatureOffset: 0,   // 溫度偏移（-0.5 到 0.5，模擬冰河期/暖化）
-    riverDensity: 10000,    // Phase 8: 河流密度（水滴數量，1000-50000）
-    riverThreshold: 5       // Phase 8: 河流顯示閾值（最小 flux 值）
+    temperatureOffset: 0,      // 溫度偏移（-0.5 到 0.5，模擬冰河期/暖化）
+    riverDensity: 10000,       // Phase 8: 河流密度（水滴數量，1000-50000）
+    riverThreshold: 5,         // Phase 8: 河流顯示閾值（最小 flux 值）
+    irrigationStrength: 1.0,   // Phase 9: 灌溉強度（0.0-5.0，河流對濕度的影響）
+    useAdvancedIrrigation: true // Phase 9: 使用進階灌溉（擴散到鄰居）
 };
 
 // 生物群系顏色配置（Whittaker 分類系統擴展）

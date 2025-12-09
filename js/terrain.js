@@ -315,3 +315,122 @@ function simulateDroplet(startX, startY) {
 
     return pathLength;
 }
+
+/**
+ * ========================================
+ * PHASE 9: 生態系統回饋迴圈（尼羅河效應）
+ * ========================================
+ * 河流改變周圍濕度，創造綠洲和河岸森林
+ */
+
+/**
+ * 應用水文系統對濕度的影響
+ * 河流會增加周圍土地的濕度，改變生物群系
+ *
+ * @param {number} strength - 灌溉強度（0.0-5.0，建議 1.0）
+ */
+export function applyHydrologyToMoisture(strength = 1.0) {
+    console.log(`💧 應用水文回饋到濕度層（強度: ${strength.toFixed(2)}）...`);
+    const startTime = performance.now();
+
+    let affectedPixels = 0;
+
+    // Phase 9.1: 基礎版本 - 直接影響河流像素
+    for (let i = 0; i < mapData.flux.length; i++) {
+        const flux = mapData.flux[i];
+
+        if (flux > 0) {
+            // 計算濕度獎勵（基於水流量和強度）
+            // 公式：flux 越高，濕度增加越多，但有上限
+            const bonus = Math.min(0.5, flux * strength * 0.005);
+
+            // 應用到濕度（確保不超過 [0, 1] 範圍）
+            const oldMoisture = mapData.moisture[i];
+            mapData.moisture[i] = Math.min(1.0, oldMoisture + bonus);
+
+            if (mapData.moisture[i] > oldMoisture) {
+                affectedPixels++;
+            }
+        }
+    }
+
+    const endTime = performance.now();
+    console.log(`✅ 水文回饋應用完成！`);
+    console.log(`   - 影響像素: ${affectedPixels}`);
+    console.log(`   - 執行時間: ${(endTime - startTime).toFixed(2)} ms`);
+}
+
+/**
+ * 應用水文系統對濕度的影響（進階版：包含擴散效果）
+ * 河流會增加周圍土地的濕度，創造更寬的河岸綠帶
+ *
+ * @param {number} strength - 灌溉強度（0.0-5.0）
+ * @param {number} spreadRadius - 擴散半徑（預設 1 = 4 方向鄰居）
+ */
+export function applyHydrologyToMoistureAdvanced(strength = 1.0, spreadRadius = 1) {
+    console.log(`💧 應用水文回饋到濕度層（強度: ${strength.toFixed(2)}, 擴散半徑: ${spreadRadius}）...`);
+    const startTime = performance.now();
+
+    let affectedPixels = 0;
+
+    // 創建臨時陣列儲存濕度增量（避免覆蓋原始值）
+    const moistureBonus = new Float32Array(mapData.moisture.length);
+
+    // Phase 9.2: 進階版本 - 河流影響 + 擴散到鄰居
+    for (let y = 0; y < MAP_CONFIG.height; y++) {
+        for (let x = 0; x < MAP_CONFIG.width; x++) {
+            const index = y * MAP_CONFIG.width + x;
+            const flux = mapData.flux[index];
+
+            if (flux > 0) {
+                // 主河道濕度獎勵
+                const mainBonus = Math.min(0.5, flux * strength * 0.005);
+                moistureBonus[index] += mainBonus;
+
+                // 擴散到鄰居（4 方向或 8 方向）
+                const neighbors = spreadRadius === 1
+                    ? [{ dx: 0, dy: -1 }, { dx: -1, dy: 0 }, { dx: 1, dy: 0 }, { dx: 0, dy: 1 }]  // 4 方向
+                    : [  // 8 方向
+                        { dx: -1, dy: -1 }, { dx: 0, dy: -1 }, { dx: 1, dy: -1 },
+                        { dx: -1, dy: 0 },                      { dx: 1, dy: 0 },
+                        { dx: -1, dy: 1 },  { dx: 0, dy: 1 },  { dx: 1, dy: 1 }
+                    ];
+
+                for (const { dx, dy } of neighbors) {
+                    const nx = x + dx;
+                    const ny = y + dy;
+
+                    // 邊界檢查
+                    if (nx >= 0 && nx < MAP_CONFIG.width && ny >= 0 && ny < MAP_CONFIG.height) {
+                        const neighborIndex = ny * MAP_CONFIG.width + nx;
+                        const height = mapData.height[neighborIndex];
+
+                        // 僅影響陸地（不影響海洋）
+                        if (height > terrainConfig.seaLevel) {
+                            // 鄰居獲得較弱的濕度獎勵（50% 強度）
+                            const spreadBonus = mainBonus * 0.5;
+                            moistureBonus[neighborIndex] += spreadBonus;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 應用濕度增量到實際 moisture 陣列
+    for (let i = 0; i < mapData.moisture.length; i++) {
+        if (moistureBonus[i] > 0) {
+            const oldMoisture = mapData.moisture[i];
+            mapData.moisture[i] = Math.min(1.0, oldMoisture + moistureBonus[i]);
+
+            if (mapData.moisture[i] > oldMoisture) {
+                affectedPixels++;
+            }
+        }
+    }
+
+    const endTime = performance.now();
+    console.log(`✅ 水文回饋應用完成！`);
+    console.log(`   - 影響像素: ${affectedPixels}`);
+    console.log(`   - 執行時間: ${(endTime - startTime).toFixed(2)} ms`);
+}
