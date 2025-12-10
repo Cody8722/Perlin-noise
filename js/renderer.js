@@ -168,31 +168,20 @@ export function renderTerrain() {
                     // 生物群系視圖（預設）
                     color = getBiomeColor(height, moisture, temperature);
 
-                    // Phase 9.9: 增強河流視覺效果（更亮、更粗）
+                    // Phase 9.99: 「文明」風格河流（100% 不透明、極亮）
                     if (flux >= terrainConfig.riverThreshold && height > terrainConfig.seaLevel) {
-                        // 根據 flux 大小決定河流顏色亮度
-                        const riverIntensity = Math.min(1, flux / (maxFlux * 0.3));
-
-                        // 新河流顏色：亮青藍色 (64, 160, 208) - 高對比度
-                        // 大河流使用更亮的顏色 (128, 192, 224)
-                        let riverColor;
+                        // 街機風格顏色方案：完全不透明，高飽和度
                         if (flux >= LARGE_RIVER_THRESHOLD) {
-                            // 大河流：非常亮的天藍色
-                            riverColor = [128, 192, 224];
+                            // 大河流：白藍色調（反射效果）
+                            color = [224, 255, 255];  // #E0FFFF - 極亮
                         } else if (flux >= MEDIUM_RIVER_THRESHOLD) {
-                            // 中型河流：亮青藍色
-                            riverColor = [80, 176, 216];
+                            // 中型河流：深天空藍
+                            color = [0, 191, 255];    // #00BFFF - 亮藍
                         } else {
-                            // 小河流：標準青藍色
-                            riverColor = [64, 160, 208];
+                            // 小河流：亮青色
+                            color = [0, 255, 255];    // #00FFFF - 純青
                         }
-
-                        // 混合河流顏色到地形
-                        color = [
-                            Math.floor(color[0] * (1 - riverIntensity * 0.85) + riverColor[0] * riverIntensity),
-                            Math.floor(color[1] * (1 - riverIntensity * 0.85) + riverColor[1] * riverIntensity),
-                            Math.floor(color[2] * (1 - riverIntensity * 0.85) + riverColor[2] * riverIntensity)
-                        ];
+                        // 完全替換，無混合！
                     }
                     break;
             }
@@ -224,8 +213,8 @@ export function renderTerrain() {
 }
 
 /**
- * Phase 9.9: 河流寬度擴展（後處理）
- * 根據 flux 值加寬河流，使其更明顯
+ * Phase 9.99: 河流寬度擴展（後處理）- 「螢光筆」風格
+ * 根據 flux 值加寬河流，使用完全不透明的實心顏色
  *
  * @param {Uint8ClampedArray} data - ImageData.data 陣列
  * @param {number} maxFlux - 最大 flux 值
@@ -236,6 +225,9 @@ function expandRivers(data, maxFlux, mediumThreshold, largeThreshold) {
     // 創建河流標記地圖（避免重複處理）
     const riverMarkers = new Uint8Array(MAP_CONFIG.width * MAP_CONFIG.height);
 
+    // Phase 9.99: 檢測超大河流（前 50%）
+    const VERY_LARGE_RIVER_THRESHOLD = maxFlux * 0.50;
+
     // 第一遍：標記所有河流像素
     for (let y = 0; y < MAP_CONFIG.height; y++) {
         for (let x = 0; x < MAP_CONFIG.width; x++) {
@@ -244,8 +236,10 @@ function expandRivers(data, maxFlux, mediumThreshold, largeThreshold) {
             const height = mapData.height[index];
 
             if (flux >= terrainConfig.riverThreshold && height > terrainConfig.seaLevel) {
-                if (flux >= largeThreshold) {
-                    riverMarkers[index] = 3;  // 大河流：3×3
+                if (flux >= VERY_LARGE_RIVER_THRESHOLD) {
+                    riverMarkers[index] = 4;  // 超大河流：5×5 方塊
+                } else if (flux >= largeThreshold) {
+                    riverMarkers[index] = 3;  // 大河流：4×4 方塊
                 } else if (flux >= mediumThreshold) {
                     riverMarkers[index] = 2;  // 中型河流：十字形
                 } else {
@@ -272,12 +266,23 @@ function expandRivers(data, maxFlux, mediumThreshold, largeThreshold) {
             // 定義擴展模式
             let expandPattern = [];
 
-            if (riverSize === 3) {
-                // 大河流：3×3 方塊
+            if (riverSize === 4) {
+                // 超大河流：5×5 方塊（距離 2）
+                for (let dy = -2; dy <= 2; dy++) {
+                    for (let dx = -2; dx <= 2; dx++) {
+                        if (dx === 0 && dy === 0) continue;
+                        expandPattern.push({ dx, dy });
+                    }
+                }
+            } else if (riverSize === 3) {
+                // 大河流：4×4 方塊（距離 1.5，近似）
                 expandPattern = [
                     { dx: -1, dy: -1 }, { dx: 0, dy: -1 }, { dx: 1, dy: -1 },
                     { dx: -1, dy:  0 },                    { dx: 1, dy:  0 },
-                    { dx: -1, dy:  1 }, { dx: 0, dy:  1 }, { dx: 1, dy:  1 }
+                    { dx: -1, dy:  1 }, { dx: 0, dy:  1 }, { dx: 1, dy:  1 },
+                    // 增加對角線第二圈
+                    { dx: -2, dy: 0 }, { dx: 2, dy: 0 },
+                    { dx: 0, dy: -2 }, { dx: 0, dy: 2 }
                 ];
             } else if (riverSize === 2) {
                 // 中型河流：十字形（4 方向）
@@ -289,7 +294,7 @@ function expandRivers(data, maxFlux, mediumThreshold, largeThreshold) {
             }
             // riverSize === 1 時不擴展
 
-            // 應用擴展模式
+            // 應用擴展模式（Phase 9.99: 完全覆蓋，無混合）
             for (const { dx, dy } of expandPattern) {
                 const nx = x + dx;
                 const ny = y + dy;
@@ -298,14 +303,15 @@ function expandRivers(data, maxFlux, mediumThreshold, largeThreshold) {
                 if (nx >= 0 && nx < MAP_CONFIG.width && ny >= 0 && ny < MAP_CONFIG.height) {
                     const neighborIndex = ny * MAP_CONFIG.width + nx;
 
-                    // 只在非河流像素上繪製（避免覆蓋更大的河流）
-                    if (riverMarkers[neighborIndex] === 0) {
+                    // 只在非河流像素或更小河流上繪製
+                    if (riverMarkers[neighborIndex] < riverSize) {
                         const neighborPixelIndex = neighborIndex * 4;
 
-                        // 混合河流顏色（70% 河流，30% 原始地形）
-                        data[neighborPixelIndex] = Math.floor(riverR * 0.7 + data[neighborPixelIndex] * 0.3);
-                        data[neighborPixelIndex + 1] = Math.floor(riverG * 0.7 + data[neighborPixelIndex + 1] * 0.3);
-                        data[neighborPixelIndex + 2] = Math.floor(riverB * 0.7 + data[neighborPixelIndex + 2] * 0.3);
+                        // Phase 9.99: 完全覆蓋（100% 不透明）
+                        data[neighborPixelIndex] = riverR;
+                        data[neighborPixelIndex + 1] = riverG;
+                        data[neighborPixelIndex + 2] = riverB;
+                        // Alpha 保持 255（已設定）
                     }
                 }
             }
