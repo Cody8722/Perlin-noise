@@ -20,6 +20,7 @@ class PerlinNoise {
             214,31,181,199,106,157,184,84,204,176,115,121,50,45,127,4,150,254,138,236,205,
             93,222,114,67,29,24,72,243,141,128,195,78,66,215,61,156,180
         ];
+        this.rng = null;  // Phase 12: 種子化隨機數生成器（確定性）
         this.init(0);
     }
 
@@ -45,13 +46,16 @@ class PerlinNoise {
      * @param {number} seed - 隨機種子（支援完整 32 位元整數）
      */
     init(seed) {
-        // 使用 Mulberry32 生成確定性隨機序列
-        const rng = this.mulberry32(seed);
+        // Phase 12: 保存 RNG 實例供其他模組使用（河流生成）
+        this.rng = this.mulberry32(seed);
+
+        // 創建臨時 RNG 用於洗牌（避免影響主 RNG 狀態）
+        const shuffleRng = this.mulberry32(seed);
 
         // Fisher-Yates 洗牌演算法：從基礎排列生成隨機置換
         const shuffled = [...this.perm];
         for (let i = shuffled.length - 1; i > 0; i--) {
-            const j = Math.floor(rng() * (i + 1));
+            const j = Math.floor(shuffleRng() * (i + 1));
             [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
         }
 
@@ -59,6 +63,19 @@ class PerlinNoise {
         for (let i = 0; i < 256; i++) {
             this.p[256 + i] = this.p[i] = shuffled[i];
         }
+    }
+
+    /**
+     * Phase 12: 獲取確定性隨機數
+     * 使用當前種子的 Mulberry32 PRNG
+     * @returns {number} [0, 1) 範圍的隨機數
+     */
+    random() {
+        if (!this.rng) {
+            console.error('❌ RNG 未初始化！請先調用 init(seed)');
+            return Math.random();  // 回退到 Math.random()
+        }
+        return this.rng();
     }
 
     /**

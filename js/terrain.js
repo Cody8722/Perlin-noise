@@ -199,6 +199,10 @@ export function generateRivers(numDroplets = 10000) {
     console.log(`🌊 開始生成河流網絡（${numDroplets} 個水滴）...`);
     const startTime = performance.now();
 
+    // Phase 12: 🔒 重置 RNG 到當前種子（確保確定性）
+    noise.init(terrainConfig.seed);
+    console.log(`   🎲 RNG 已重置到種子: ${terrainConfig.seed}`);
+
     // 重置 flux 資料
     mapData.flux.fill(0);
 
@@ -221,8 +225,8 @@ export function generateRivers(numDroplets = 10000) {
     // 模擬每個水滴
     let successfulDroplets = 0;
     for (let i = 0; i < numDroplets; i++) {
-        // 隨機選擇陸地起點
-        const startPos = landCoords[Math.floor(Math.random() * landCoords.length)];
+        // Phase 12: 使用種子化 RNG（確定性）而非 Math.random()
+        const startPos = landCoords[Math.floor(noise.random() * landCoords.length)];
 
         // 模擬水滴路徑
         const pathLength = simulateDroplet(startPos.x, startPos.y);
