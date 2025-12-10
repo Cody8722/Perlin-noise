@@ -10,6 +10,7 @@ import { MAP_CONFIG, terrainConfig } from './config.js';
 export const mapData = {
     height: new Float32Array(MAP_CONFIG.width * MAP_CONFIG.height),
     moisture: new Float32Array(MAP_CONFIG.width * MAP_CONFIG.height),
+    baseMoisture: new Float32Array(MAP_CONFIG.width * MAP_CONFIG.height),  // Phase 11: 不可變的原始濕度（防止累積突變）
     temperature: new Float32Array(MAP_CONFIG.width * MAP_CONFIG.height),
     flux: new Float32Array(MAP_CONFIG.width * MAP_CONFIG.height)  // 水流累積量
 };
@@ -45,6 +46,9 @@ export function generateTerrain() {
                 terrainConfig.scale * 1.5,
                 5000  // 使用不同的種子偏移
             );
+
+            // Phase 11: 保存原始濕度到不可變備份
+            mapData.baseMoisture[index] = moisture;
             mapData.moisture[index] = moisture;
 
             // 生成溫度值
@@ -338,6 +342,10 @@ export function applyHydrologyToMoisture(strength = 1.0, fluxThreshold = 3) {
     console.log(`💧 應用水文回饋到濕度層（強度: ${strength.toFixed(2)}, 閾值: ${fluxThreshold}）...`);
     const startTime = performance.now();
 
+    // Phase 11: 🔒 CRITICAL - 從不可變備份重置濕度（防止累積突變）
+    mapData.moisture.set(mapData.baseMoisture);
+    console.log(`   🔄 濕度已從原始狀態重置`);
+
     let affectedPixels = 0;
 
     // Phase 9.5: 創建臨時濕度增量地圖（防止覆蓋）
@@ -422,6 +430,10 @@ export function applyHydrologyToMoisture(strength = 1.0, fluxThreshold = 3) {
 export function applyHydrologyToMoistureAdvanced(strength = 1.0, spreadRadius = 1, fluxThreshold = 3) {
     console.log(`💧 應用水文回饋到濕度層（強度: ${strength.toFixed(2)}, 擴散: ${spreadRadius}, 閾值: ${fluxThreshold}）...`);
     const startTime = performance.now();
+
+    // Phase 11: 🔒 CRITICAL - 從不可變備份重置濕度（防止累積突變）
+    mapData.moisture.set(mapData.baseMoisture);
+    console.log(`   🔄 濕度已從原始狀態重置（進階模式）`);
 
     let affectedPixels = 0;
 
