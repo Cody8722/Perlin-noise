@@ -77,8 +77,13 @@ export const TERRAIN_GEN_CONSTANTS = {
     TEMPERATURE_NOISE_WEIGHT: 0.3,       // 噪聲對溫度的權重（30%）
     TEMPERATURE_LATITUDE_FACTOR: 2,      // 緯度因子倍數（赤道-極地）
 
-    // 海拔對溫度的影響（高度遞減率）
-    ELEVATION_TEMPERATURE_PENALTY: 1.5,  // 海拔每 0.1 單位降溫 0.15
+    // Phase 17.5: 海拔對溫度的影響（高度遞減率）
+    ELEVATION_TEMPERATURE_PENALTY: 2.0,  // 海拔每 0.1 單位降溫 0.20（加強版，1.5→2.0）
+    ELEVATION_BASELINE: 0,               // 海拔基準線（0 = 從海平面開始計算）
+
+    // Phase 17.5: 氣候平滑參數（創造自然的生態過渡帶 Ecotones）
+    CLIMATE_SMOOTHING_ITERATIONS: 2,     // 平滑迭代次數（1-3，2 為最佳平衡）
+    CLIMATE_SMOOTHING_STRENGTH: 0.6,     // 平滑強度（0-1，越高越平滑）
 
     // 範圍限制
     VALUE_MIN: 0,                        // 最小值（高度/濕度/溫度）

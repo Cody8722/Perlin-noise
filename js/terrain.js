@@ -40,6 +40,7 @@ export const mapData = {
  * 3. 對每個像素生成濕度（獨立的 FBM）
  * 4. 對每個像素生成溫度（緯度 + 噪聲 + 海拔）
  * 5. 保存不可變的濕度備份（Phase 11：防止累積突變）
+ * 6. Phase 17.5: 應用氣候平滑（創造自然的生態過渡帶）
  *
  * @throws {Error} 如果噪聲生成器初始化失敗
  */
@@ -79,6 +80,9 @@ export function generateTerrain() {
             mapData.temperature[index] = generateTemperatureAt(x, y, height);
         }
     }
+
+    // Phase 17.5: 應用氣候平滑（消除突兀的生物群系過渡）
+    applyClimateSmoothing();
 }
 
 /**
@@ -115,9 +119,11 @@ function generateTemperatureAt(x, y, elevation) {
         TERRAIN_GEN_CONSTANTS.TEMPERATURE_SEED_OFFSET  // 獨立種子空間
     );
 
-    // 3. 高度遞減率（海拔越高越冷）
-    // 模擬對流層溫度遞減：海平面以上每 0.1 單位降溫 0.15
-    const elevationPenalty = Math.max(0, (elevation - terrainConfig.seaLevel)) * TERRAIN_GEN_CONSTANTS.ELEVATION_TEMPERATURE_PENALTY;
+    // 3. Phase 17.5: 高度遞減率（海拔越高越冷）- 加強版
+    // 模擬對流層溫度遞減：從海平面開始，每 0.1 單位海拔降溫更多
+    // 物理基礎：Environmental Lapse Rate (~6.5°C/km)
+    const elevationAboveBaseline = Math.max(0, elevation - TERRAIN_GEN_CONSTANTS.ELEVATION_BASELINE);
+    const elevationPenalty = elevationAboveBaseline * TERRAIN_GEN_CONSTANTS.ELEVATION_TEMPERATURE_PENALTY;
 
     // 4. 組合所有因素（加權混合）
     // 基礎溫度：70% 來自緯度（主導因素），30% 來自噪聲（局部擾動）
@@ -132,6 +138,80 @@ function generateTemperatureAt(x, y, elevation) {
 
     // 限制在 [0, 1] 範圍
     return Math.max(TERRAIN_GEN_CONSTANTS.VALUE_MIN, Math.min(TERRAIN_GEN_CONSTANTS.VALUE_MAX, temperature));
+}
+
+/**
+ * Phase 17.5: 應用氣候平滑
+ * 對溫度和濕度圖應用多輪高斯平滑，創造自然的生態過渡帶（Ecotones）
+ *
+ * 物理基礎：
+ * - 真實世界的氣候不會突變（空氣和水流創造平滑過渡）
+ * - 生態過渡帶：熱帶雨林 → 溫帶森林 → 針葉林 → 苔原 → 雪地
+ * - 防止「雪地緊鄰雨林」等不合理現象
+ *
+ * 算法：
+ * 1. 對溫度和濕度圖應用 3×3 高斯模糊
+ * 2. 重複平滑 N 次（可配置）
+ * 3. 使用混合強度（保留部分原始特徵）
+ */
+function applyClimateSmoothing() {
+    console.log(`🌡️ 應用氣候平滑（迭代次數: ${TERRAIN_GEN_CONSTANTS.CLIMATE_SMOOTHING_ITERATIONS}）...`);
+    const startTime = performance.now();
+
+    // 對溫度和濕度圖各自應用平滑
+    for (let iteration = 0; iteration < TERRAIN_GEN_CONSTANTS.CLIMATE_SMOOTHING_ITERATIONS; iteration++) {
+        smoothDataArray(mapData.temperature);
+        smoothDataArray(mapData.moisture);
+        // 同時更新不可變的濕度備份（Phase 11 相容性）
+        smoothDataArray(mapData.baseMoisture);
+    }
+
+    const endTime = performance.now();
+    console.log(`✅ 氣候平滑完成！執行時間: ${(endTime - startTime).toFixed(2)} ms`);
+}
+
+/**
+ * Phase 17.5: 對資料陣列應用 3×3 高斯平滑
+ * 通用的平滑函數，可用於任何 Float32Array
+ *
+ * @param {Float32Array} dataArray - 要平滑的資料陣列
+ */
+function smoothDataArray(dataArray) {
+    const smoothed = new Float32Array(dataArray.length);
+    const strength = TERRAIN_GEN_CONSTANTS.CLIMATE_SMOOTHING_STRENGTH;
+
+    for (let y = 0; y < MAP_CONFIG.height; y++) {
+        for (let x = 0; x < MAP_CONFIG.width; x++) {
+            const index = y * MAP_CONFIG.width + x;
+            let weightedSum = 0;
+
+            // 遍歷 3×3 鄰居，應用高斯核
+            let kernelIndex = 0;
+            for (let dy = -1; dy <= 1; dy++) {
+                for (let dx = -1; dx <= 1; dx++) {
+                    const nx = x + dx;
+                    const ny = y + dy;
+
+                    // 邊界檢查
+                    if (nx >= 0 && nx < MAP_CONFIG.width && ny >= 0 && ny < MAP_CONFIG.height) {
+                        const neighborIndex = ny * MAP_CONFIG.width + nx;
+                        weightedSum += dataArray[neighborIndex] * GAUSSIAN_KERNEL_3X3[kernelIndex];
+                    } else {
+                        // 邊界外：使用當前像素值（鏡像邊界）
+                        weightedSum += dataArray[index] * GAUSSIAN_KERNEL_3X3[kernelIndex];
+                    }
+
+                    kernelIndex++;
+                }
+            }
+
+            // 混合原始值和平滑值（保留部分細節）
+            smoothed[index] = dataArray[index] * (1 - strength) + weightedSum * strength;
+        }
+    }
+
+    // 將平滑結果寫回原陣列
+    dataArray.set(smoothed);
 }
 
 /**
