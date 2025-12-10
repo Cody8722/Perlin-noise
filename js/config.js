@@ -1,12 +1,174 @@
 /**
- * 全域配置管理
- * 管理地圖尺寸、生成參數、顏色配置等
+ * ========================================
+ * Phase 14.5: 全域配置與常量管理
+ * ========================================
+ * 集中管理所有魔術數字、配置參數、顏色方案
+ * 確保代碼可維護性和可測試性
  */
 
+// ========================================
 // 地圖尺寸配置 (3:2 比例)
+// ========================================
 export const MAP_CONFIG = {
     width: 300,
     height: 200
+};
+
+// ========================================
+// Phase 14.5: Perlin Noise 算法常量
+// ========================================
+/**
+ * Perlin Noise 算法使用的數學常量
+ * 這些值經過精心調整以產生最佳視覺效果
+ */
+export const PERLIN_CONSTANTS = {
+    // Mulberry32 PRNG 常量
+    MULBERRY32_MAGIC: 0x6D2B79F5,        // Mulberry32 魔數（質數相關）
+    MULBERRY32_SHIFT_1: 15,              // 第一次位移量
+    MULBERRY32_SHIFT_2: 7,               // 第二次位移量
+    MULBERRY32_SHIFT_3: 14,              // 第三次位移量
+    MULBERRY32_DIVISOR: 4294967296,      // 2^32，用於正規化到 [0,1)
+    MULBERRY32_MULTIPLIER_1: 1,          // 第一次乘數
+    MULBERRY32_MULTIPLIER_2: 61,         // 第二次乘數
+
+    // 置換表常量
+    PERMUTATION_SIZE: 256,               // 置換表大小（2^8）
+    PERMUTATION_DOUBLE_SIZE: 512,        // 雙倍大小（避免溢位檢查）
+
+    // 淡化函數（Fade Function）6t^5 - 15t^4 + 10t^3
+    FADE_COEFF_1: 6,                     // t^5 係數
+    FADE_COEFF_2: 15,                    // t^4 係數
+    FADE_COEFF_3: 10,                    // t^3 係數
+
+    // 梯度函數常量
+    GRADIENT_HASH_MASK: 15,              // 梯度哈希掩碼（4 位元）
+    GRADIENT_U_THRESHOLD: 8,             // u 方向閾值
+    GRADIENT_V_THRESHOLD: 4,             // v 方向閾值
+    GRADIENT_V_SPECIAL_1: 12,            // v 特殊情況 1
+    GRADIENT_V_SPECIAL_2: 14,            // v 特殊情況 2
+
+    // FBM（分形布朗運動）常量
+    FBM_AMPLITUDE_DECAY: 0.5,            // 每層振幅衰減因子
+    FBM_FREQUENCY_MULTIPLIER: 2,         // 每層頻率倍增因子
+    FBM_NORMALIZATION_OFFSET: 0.5,       // 正規化偏移量（-1,1 → 0,1）
+
+    // 位運算掩碼
+    BITWISE_MASK_255: 255                // 8 位元掩碼（Math.floor & 255）
+};
+
+// ========================================
+// Phase 14.5: 地形生成算法常量
+// ========================================
+/**
+ * 控制地形生成的各項參數
+ * 包括濕度、溫度、海拔的計算常量
+ */
+export const TERRAIN_GEN_CONSTANTS = {
+    // 濕度生成參數
+    MOISTURE_OCTAVES: 3,                 // 濕度噪聲層數（較少細節）
+    MOISTURE_SCALE_MULTIPLIER: 1.5,      // 濕度縮放倍數（更大的氣候區）
+    MOISTURE_SEED_OFFSET: 5000,          // 濕度種子偏移（避免與高度重疊）
+
+    // 溫度生成參數
+    TEMPERATURE_OCTAVES: 3,              // 溫度噪聲層數
+    TEMPERATURE_SCALE_MULTIPLIER: 2,     // 溫度縮放倍數（更大的氣候帶）
+    TEMPERATURE_SEED_OFFSET: 10000,      // 溫度種子偏移
+    TEMPERATURE_LATITUDE_WEIGHT: 0.7,    // 緯度對溫度的權重（70%）
+    TEMPERATURE_NOISE_WEIGHT: 0.3,       // 噪聲對溫度的權重（30%）
+    TEMPERATURE_LATITUDE_FACTOR: 2,      // 緯度因子倍數（赤道-極地）
+
+    // 海拔對溫度的影響（高度遞減率）
+    ELEVATION_TEMPERATURE_PENALTY: 1.5,  // 海拔每 0.1 單位降溫 0.15
+
+    // 範圍限制
+    VALUE_MIN: 0,                        // 最小值（高度/濕度/溫度）
+    VALUE_MAX: 1                         // 最大值
+};
+
+// ========================================
+// Phase 14.5: 河流生成（水文系統）常量
+// ========================================
+/**
+ * Monte Carlo 水滴模擬的物理參數
+ */
+export const RIVER_GEN_CONSTANTS = {
+    // 水滴模擬參數
+    MAX_DROPLET_ITERATIONS: 1000,        // 單個水滴最大迭代次數（防止無限迴圈）
+    DEFAULT_DROPLET_COUNT: 10000,        // 預設水滴數量
+
+    // Flux 到濕度的轉換係數
+    FLUX_TO_MOISTURE_COEFF: 0.005,       // Flux 轉濕度獎勵係數
+    MAX_MOISTURE_BONUS: 0.5,             // 單個像素最大濕度獎勵
+
+    // 濕度影響閾值
+    MIN_FLUX_THRESHOLD: 3,               // 最小 Flux 閾值（過濾小支流）
+    MOISTURE_INCREMENT_EPSILON: 0.001,   // 微小增量閾值（忽略噪聲）
+
+    // 擴散與平滑參數
+    SPREAD_BONUS_DECAY: 0.5,             // 擴散獎勵衰減係數
+    SMOOTH_CENTER_WEIGHT: 0.4,           // 平滑中心權重（40%）
+    SMOOTH_NEIGHBOR_WEIGHT: 0.15         // 平滑鄰居權重（15% 各）
+};
+
+// ========================================
+// Phase 14.5: 高斯平滑核（Gaussian Kernel）
+// ========================================
+/**
+ * 3×3 高斯核權重（已歸一化）
+ * 用於濕度空間平滑，創造自然過渡
+ *
+ * 核心公式：G(x,y) = (1/16) * [1 2 1; 2 4 2; 1 2 1]
+ */
+export const GAUSSIAN_KERNEL_3X3 = [
+    0.077, 0.123, 0.077,   // 上排   (1/13, 2/13, 1/13)
+    0.123, 0.200, 0.123,   // 中排   (2/13, 3/13, 2/13) - 中心權重最高
+    0.077, 0.123, 0.077    // 下排   (1/13, 2/13, 1/13)
+];
+
+// ========================================
+// Phase 14.5: 渲染與視覺化常量
+// ========================================
+/**
+ * 控制地形渲染的視覺效果參數
+ */
+export const RENDER_CONSTANTS = {
+    // 河流寬度閾值（百分比）
+    MEDIUM_RIVER_THRESHOLD: 0.15,        // 前 15% flux 為中型河流
+    LARGE_RIVER_THRESHOLD: 0.30,         // 前 30% flux 為大型河流
+    VERY_LARGE_RIVER_THRESHOLD: 0.50,    // 前 50% flux 為超大河流
+
+    // 河流顏色（RGB）- "文明" 風格
+    RIVER_COLOR_SMALL: [0, 255, 255],     // 小河流：純青色 (#00FFFF)
+    RIVER_COLOR_MEDIUM: [0, 191, 255],    // 中型河流：深天空藍 (#00BFFF)
+    RIVER_COLOR_LARGE: [224, 255, 255],   // 大河流：極亮白藍 (#E0FFFF)
+
+    // 河流擴展尺寸（像素）
+    RIVER_EXPAND_SMALL: 1,               // 小河流：單像素
+    RIVER_EXPAND_MEDIUM: 2,              // 中型河流：十字形
+    RIVER_EXPAND_LARGE: 3,               // 大河流：4×4 方塊
+    RIVER_EXPAND_VERY_LARGE: 4,          // 超大河流：5×5 方塊
+
+    // Flux 視覺化
+    FLUX_GRADIENT_EXPONENT: 0.3,         // Flux 梯度指數（強調小河流）
+    FLUX_BLUE_BASE: 200,                 // Flux 藍色基礎值
+    FLUX_BLUE_RANGE: 55,                 // Flux 藍色範圍
+    FLUX_INTENSITY_FACTOR: 0.6,          // Flux 強度係數
+
+    // 陰影效果
+    SHADOW_HEIGHT_THRESHOLD: 0.02,       // 陰影高度差閾值
+    SHADOW_INTENSITY: 0.8,               // 陰影強度（0.8 = 20% 變暗）
+
+    // 雲層渲染
+    CLOUD_WIDTH_MULTIPLIER: 2,           // 雲層寬度倍數（無縫滾動）
+    CLOUD_SEED_OFFSET: 999,              // 雲層種子偏移
+    CLOUD_OCTAVES: 3,                    // 雲層噪聲層數
+    CLOUD_SCALE: 100,                    // 雲層縮放
+    CLOUD_THRESHOLD: 0.6,                // 雲層顯示閾值
+    CLOUD_ALPHA_MULTIPLIER: 400,         // 雲層透明度乘數
+
+    // 顏色強度
+    RGB_MAX: 255,                        // RGB 最大值
+    RGB_MIN: 0                           // RGB 最小值
 };
 
 /**

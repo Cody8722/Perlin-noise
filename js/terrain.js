@@ -1,10 +1,25 @@
 /**
- * 地形生成模組
- * 負責生成地形高度圖和濕度圖
+ * ========================================
+ * Phase 14.5: 地形生成模組（專業版）
+ * ========================================
+ * 實作完整的地形生成系統，包括：
+ * - 高度圖生成（Perlin FBM）
+ * - 濕度場生成
+ * - 溫度場生成（緯度 + 海拔）
+ * - 河流水文系統（Monte Carlo 模擬）
+ * - 生態系統回饋（尼羅河效應）
+ *
+ * @module terrain
  */
 
 import noise from './noise.js';
-import { MAP_CONFIG, terrainConfig } from './config.js';
+import {
+    MAP_CONFIG,
+    terrainConfig,
+    TERRAIN_GEN_CONSTANTS,
+    RIVER_GEN_CONSTANTS,
+    GAUSSIAN_KERNEL_3X3
+} from './config.js';
 
 // 地圖資料儲存
 export const mapData = {
@@ -18,6 +33,15 @@ export const mapData = {
 /**
  * 生成地形資料
  * 使用 Perlin 噪聲生成高度圖、濕度圖和溫度圖
+ *
+ * 算法流程：
+ * 1. 初始化噪聲生成器（設定種子）
+ * 2. 對每個像素生成高度（FBM）
+ * 3. 對每個像素生成濕度（獨立的 FBM）
+ * 4. 對每個像素生成溫度（緯度 + 噪聲 + 海拔）
+ * 5. 保存不可變的濕度備份（Phase 11：防止累積突變）
+ *
+ * @throws {Error} 如果噪聲生成器初始化失敗
  */
 export function generateTerrain() {
     // 設定噪聲種子
@@ -34,7 +58,7 @@ export function generateTerrain() {
                 y,
                 terrainConfig.octaves,
                 terrainConfig.scale,
-                0  // 無種子偏移
+                0  // 高度層無偏移
             );
             mapData.height[index] = height;
 
@@ -42,16 +66,16 @@ export function generateTerrain() {
             const moisture = noise.fbm(
                 x,
                 y,
-                3,  // 濕度使用較少的細節
-                terrainConfig.scale * 1.5,
-                5000  // 使用不同的種子偏移
+                TERRAIN_GEN_CONSTANTS.MOISTURE_OCTAVES,  // 較少細節（3 層）
+                terrainConfig.scale * TERRAIN_GEN_CONSTANTS.MOISTURE_SCALE_MULTIPLIER,
+                TERRAIN_GEN_CONSTANTS.MOISTURE_SEED_OFFSET  // 獨立種子空間
             );
 
-            // Phase 11: 保存原始濕度到不可變備份
+            // Phase 11: 保存原始濕度到不可變備份（防止河流累積修改）
             mapData.baseMoisture[index] = moisture;
             mapData.moisture[index] = moisture;
 
-            // 生成溫度值
+            // 生成溫度值（緯度 + 噪聲 + 海拔影響）
             mapData.temperature[index] = generateTemperatureAt(x, y, height);
         }
     }
@@ -60,14 +84,19 @@ export function generateTerrain() {
 /**
  * 生成特定座標的溫度值
  * 溫度受三個因素影響：
- * 1. 緯度（赤道熱，極地冷）
- * 2. Perlin 噪聲（自然變化）
- * 3. 海拔高度（高度遞減率，每升高 1000m 降溫約 6.5°C）
+ * 1. 緯度（赤道熱，極地冷）- 基於物理的溫度梯度
+ * 2. Perlin 噪聲（自然變化）- 創造氣候帶的不規則性
+ * 3. 海拔高度（高度遞減率）- 模擬對流層溫度遞減（~6.5°C/km）
  *
- * @param {number} x - X 座標
- * @param {number} y - Y 座標
- * @param {number} elevation - 海拔高度 (0-1)
- * @returns {number} 溫度值 (0-1，0=極冷，1=極熱)
+ * 物理基礎：
+ * - 緯度效應：太陽輻射角度差異（赤道直射，極地斜射）
+ * - 海拔效應：對流層溫度遞減率（Environmental Lapse Rate）
+ * - 噪聲擾動：海洋/陸地分佈、洋流、山脈等局部效應
+ *
+ * @param {number} x - X 座標（0 到 MAP_CONFIG.width-1）
+ * @param {number} y - Y 座標（0 到 MAP_CONFIG.height-1）
+ * @param {number} elevation - 海拔高度 (0-1，0=海溝，1=高山）
+ * @returns {number} 溫度值（0-1，0=極冷，1=極熱）
  */
 function generateTemperatureAt(x, y, elevation) {
     // 1. 計算緯度因子（0 = 北極，0.5 = 赤道，1 = 南極）
@@ -75,33 +104,34 @@ function generateTemperatureAt(x, y, elevation) {
 
     // 使用絕對值創建對稱的溫度帶（赤道最熱）
     // Math.abs(latitude - 0.5) 在赤道處為 0，兩極處為 0.5
-    const latitudeFactor = 1 - Math.abs(latitude - 0.5) * 2;  // 0-1，赤道=1，極地=0
+    const latitudeFactor = 1 - Math.abs(latitude - 0.5) * TERRAIN_GEN_CONSTANTS.TEMPERATURE_LATITUDE_FACTOR;  // 0-1，赤道=1，極地=0
 
     // 2. 添加 Perlin 噪聲變化（使氣候帶不完全規則）
     const temperatureNoise = noise.fbm(
         x,
         y,
-        3,  // 較少的細節
-        terrainConfig.scale * 2,  // 較大的氣候區域
-        10000  // 獨特的種子偏移
+        TERRAIN_GEN_CONSTANTS.TEMPERATURE_OCTAVES,  // 較少細節（平滑氣候區）
+        terrainConfig.scale * TERRAIN_GEN_CONSTANTS.TEMPERATURE_SCALE_MULTIPLIER,  // 大尺度氣候
+        TERRAIN_GEN_CONSTANTS.TEMPERATURE_SEED_OFFSET  // 獨立種子空間
     );
 
     // 3. 高度遞減率（海拔越高越冷）
-    // 假設海平面以上每 0.1 單位高度降溫 0.15
-    const elevationPenalty = Math.max(0, (elevation - terrainConfig.seaLevel)) * 1.5;
+    // 模擬對流層溫度遞減：海平面以上每 0.1 單位降溫 0.15
+    const elevationPenalty = Math.max(0, (elevation - terrainConfig.seaLevel)) * TERRAIN_GEN_CONSTANTS.ELEVATION_TEMPERATURE_PENALTY;
 
-    // 4. 組合所有因素
-    // 基礎溫度（70%來自緯度，30%來自噪聲）
-    let temperature = latitudeFactor * 0.7 + temperatureNoise * 0.3;
+    // 4. 組合所有因素（加權混合）
+    // 基礎溫度：70% 來自緯度（主導因素），30% 來自噪聲（局部擾動）
+    let temperature = latitudeFactor * TERRAIN_GEN_CONSTANTS.TEMPERATURE_LATITUDE_WEIGHT +
+                      temperatureNoise * TERRAIN_GEN_CONSTANTS.TEMPERATURE_NOISE_WEIGHT;
 
-    // 應用海拔影響
+    // 應用海拔影響（減法，高山降溫）
     temperature = Math.max(0, temperature - elevationPenalty);
 
     // 應用使用者偏移（模擬冰河期或全球暖化）
     temperature += terrainConfig.temperatureOffset || 0;
 
-    // 限制在 0-1 範圍
-    return Math.max(0, Math.min(1, temperature));
+    // 限制在 [0, 1] 範圍
+    return Math.max(TERRAIN_GEN_CONSTANTS.VALUE_MIN, Math.min(TERRAIN_GEN_CONSTANTS.VALUE_MAX, temperature));
 }
 
 /**
@@ -190,23 +220,41 @@ export function getTerrainData(index) {
  */
 
 /**
- * 生成河流網絡
+ * 生成河流網絡（Monte Carlo 水滴模擬）
  * 使用物理模擬：每個水滴從隨機陸地位置出發，沿著最陡的坡度向下流動
  *
- * @param {number} numDroplets - 水滴數量（建議範圍：1000-50000）
+ * 算法原理：
+ * 1. 隨機選擇陸地起點
+ * 2. 貪婪下坡算法（選擇 8 方向中最低的鄰居）
+ * 3. 累積 flux（每個像素的訪問次數）
+ * 4. 終止條件：到達海洋、局部窪地、或最大迭代次數
+ *
+ * Phase 12: 確保完全確定性（使用種子化 RNG）
+ *
+ * @param {number} [numDroplets=10000] - 水滴數量（建議範圍：1000-200000）
+ * @throws {RangeError} 如果 numDroplets < 0
  */
-export function generateRivers(numDroplets = 10000) {
-    console.log(`🌊 開始生成河流網絡（${numDroplets} 個水滴）...`);
+export function generateRivers(numDroplets = RIVER_GEN_CONSTANTS.DEFAULT_DROPLET_COUNT) {
+    // 參數驗證
+    if (numDroplets < 0) {
+        throw new RangeError(`generateRivers(): numDroplets 必須 >= 0，收到：${numDroplets}`);
+    }
+    if (numDroplets === 0) {
+        console.warn('⚠️  numDroplets = 0，跳過河流生成');
+        return;
+    }
+
+    console.log(`🌊 開始生成河流網絡（${numDroplets.toLocaleString()} 個水滴）...`);
     const startTime = performance.now();
 
     // Phase 12: 🔒 重置 RNG 到當前種子（確保確定性）
     noise.init(terrainConfig.seed);
     console.log(`   🎲 RNG 已重置到種子: ${terrainConfig.seed}`);
 
-    // 重置 flux 資料
+    // 重置 flux 資料（清除舊河流）
     mapData.flux.fill(0);
 
-    // 生成所有陸地座標列表（快取）
+    // 生成所有陸地座標列表（快取，避免重複遍歷）
     const landCoords = [];
     for (let y = 0; y < MAP_CONFIG.height; y++) {
         for (let x = 0; x < MAP_CONFIG.width; x++) {
@@ -217,8 +265,9 @@ export function generateRivers(numDroplets = 10000) {
         }
     }
 
+    // 防禦性檢查：地圖是否有陸地
     if (landCoords.length === 0) {
-        console.warn('⚠️  地圖中沒有陸地，無法生成河流');
+        console.warn('⚠️  地圖中沒有陸地（全海洋），無法生成河流');
         return;
     }
 
@@ -226,7 +275,8 @@ export function generateRivers(numDroplets = 10000) {
     let successfulDroplets = 0;
     for (let i = 0; i < numDroplets; i++) {
         // Phase 12: 使用種子化 RNG（確定性）而非 Math.random()
-        const startPos = landCoords[Math.floor(noise.random() * landCoords.length)];
+        const randomIndex = Math.floor(noise.random() * landCoords.length);
+        const startPos = landCoords[randomIndex];
 
         // 模擬水滴路徑
         const pathLength = simulateDroplet(startPos.x, startPos.y);
@@ -236,31 +286,42 @@ export function generateRivers(numDroplets = 10000) {
         }
     }
 
+    // 性能統計
     const endTime = performance.now();
+    const duration = endTime - startTime;
+    const dropletsPerSecond = (numDroplets / duration * 1000).toFixed(0);
+
     console.log(`✅ 河流生成完成！`);
-    console.log(`   - 成功水滴: ${successfulDroplets} / ${numDroplets}`);
-    console.log(`   - 執行時間: ${(endTime - startTime).toFixed(2)} ms`);
-    console.log(`   - 平均速度: ${(numDroplets / (endTime - startTime) * 1000).toFixed(0)} 水滴/秒`);
+    console.log(`   - 成功水滴: ${successfulDroplets.toLocaleString()} / ${numDroplets.toLocaleString()} (${(successfulDroplets/numDroplets*100).toFixed(1)}%)`);
+    console.log(`   - 執行時間: ${duration.toFixed(2)} ms`);
+    console.log(`   - 平均速度: ${dropletsPerSecond.toLocaleString()} 水滴/秒`);
+    console.log(`   - 效能等級: ${duration < 400 ? '✅ 優秀' : duration < 1000 ? '⚠️ 可接受' : '❌ 需要優化'}`);
 }
 
 /**
- * 模擬單個水滴的流動路徑
+ * 模擬單個水滴的流動路徑（貪婪下坡算法）
+ * 水滴從起點開始，每步選擇 8 方向中最低的鄰居移動
+ *
+ * 終止條件：
+ * 1. 到達海洋（height <= seaLevel）
+ * 2. 進入已訪問過的位置（檢測循環）
+ * 3. 到達局部窪地（無更低的鄰居）
+ * 4. 達到最大迭代次數（防止無限迴圈）
  *
  * @param {number} startX - 起始 X 座標
  * @param {number} startY - 起始 Y 座標
- * @returns {number} 路徑長度（訪問的格子數）
+ * @returns {number} 路徑長度（訪問的格子數，0 表示立即終止）
  */
 function simulateDroplet(startX, startY) {
     let x = startX;
     let y = startY;
     let pathLength = 0;
-    const maxIterations = 1000;  // 防止無限迴圈
 
-    // 訪問紀錄（防止循環）
+    // 訪問紀錄（防止循環）- 使用 Set 提供 O(1) 查找
     const visited = new Set();
     const makeKey = (x, y) => `${x},${y}`;
 
-    while (pathLength < maxIterations) {
+    while (pathLength < RIVER_GEN_CONSTANTS.MAX_DROPLET_ITERATIONS) {
         const currentHeight = getHeight(x, y);
 
         // 終止條件 1：到達海洋
@@ -359,32 +420,26 @@ export function applyHydrologyToMoisture(strength = 1.0, fluxThreshold = 3) {
     for (let i = 0; i < mapData.flux.length; i++) {
         const flux = mapData.flux[i];
 
-        // 閾值過濾：忽略小支流
+        // 閾值過濾：忽略小支流（減少噪聲）
         if (flux >= fluxThreshold) {
-            // 計算濕度獎勵
-            const bonus = Math.min(0.5, flux * strength * 0.005);
+            // 計算濕度獎勵（線性增長，有上限）
+            const bonus = Math.min(RIVER_GEN_CONSTANTS.MAX_MOISTURE_BONUS,
+                                  flux * strength * RIVER_GEN_CONSTANTS.FLUX_TO_MOISTURE_COEFF);
 
             // 主像素獲得 100% 獎勵
             moistureBonus[i] += bonus;
         }
     }
 
-    // Step 2: 空間平滑 - 3x3 鄰居平均（高斯模糊簡化版）
+    // Step 2: 空間平滑 - 3×3 高斯模糊（創造平滑過渡）
     const smoothed = new Float32Array(moistureBonus.length);
-
-    // 高斯核權重（3x3，歸一化）
-    const kernel = [
-        0.077, 0.123, 0.077,   // 上排
-        0.123, 0.200, 0.123,   // 中排（中心權重最高）
-        0.077, 0.123, 0.077    // 下排
-    ];
 
     for (let y = 0; y < MAP_CONFIG.height; y++) {
         for (let x = 0; x < MAP_CONFIG.width; x++) {
             const index = y * MAP_CONFIG.width + x;
             let weightedSum = 0;
 
-            // 遍歷 3x3 鄰居
+            // 遍歷 3×3 鄰居，應用高斯核
             let kernelIndex = 0;
             for (let dy = -1; dy <= 1; dy++) {
                 for (let dx = -1; dx <= 1; dx++) {
@@ -394,7 +449,7 @@ export function applyHydrologyToMoisture(strength = 1.0, fluxThreshold = 3) {
                     // 邊界檢查
                     if (nx >= 0 && nx < MAP_CONFIG.width && ny >= 0 && ny < MAP_CONFIG.height) {
                         const neighborIndex = ny * MAP_CONFIG.width + nx;
-                        weightedSum += moistureBonus[neighborIndex] * kernel[kernelIndex];
+                        weightedSum += moistureBonus[neighborIndex] * GAUSSIAN_KERNEL_3X3[kernelIndex];
                     }
 
                     kernelIndex++;
@@ -407,7 +462,7 @@ export function applyHydrologyToMoisture(strength = 1.0, fluxThreshold = 3) {
 
     // Step 3: 應用平滑後的濕度增量到實際 moisture 陣列
     for (let i = 0; i < mapData.moisture.length; i++) {
-        if (smoothed[i] > 0.001) {  // 忽略微小增量
+        if (smoothed[i] > RIVER_GEN_CONSTANTS.MOISTURE_INCREMENT_EPSILON) {  // 忽略微小增量
             const oldMoisture = mapData.moisture[i];
             mapData.moisture[i] = Math.min(1.0, oldMoisture + smoothed[i]);
 
@@ -453,7 +508,8 @@ export function applyHydrologyToMoistureAdvanced(strength = 1.0, spreadRadius = 
             // 閾值過濾：忽略小支流
             if (flux >= fluxThreshold) {
                 // 主河道濕度獎勵
-                const mainBonus = Math.min(0.5, flux * strength * 0.005);
+                const mainBonus = Math.min(RIVER_GEN_CONSTANTS.MAX_MOISTURE_BONUS,
+                                          flux * strength * RIVER_GEN_CONSTANTS.FLUX_TO_MOISTURE_COEFF);
                 moistureBonus[index] += mainBonus;
 
                 // 擴散到鄰居（距離衰減）
@@ -478,7 +534,7 @@ export function applyHydrologyToMoistureAdvanced(strength = 1.0, spreadRadius = 
                                 const falloff = Math.max(0, 1 - distance / (maxSpread + 1));
 
                                 // 鄰居獲得衰減後的濕度獎勵
-                                const spreadBonus = mainBonus * falloff * 0.5;
+                                const spreadBonus = mainBonus * falloff * RIVER_GEN_CONSTANTS.SPREAD_BONUS_DECAY;
                                 moistureBonus[neighborIndex] += spreadBonus;
                             }
                         }
@@ -491,12 +547,12 @@ export function applyHydrologyToMoistureAdvanced(strength = 1.0, spreadRadius = 
     // Phase 9.5: 再次平滑（防止階梯效應）
     const smoothed = new Float32Array(moistureBonus.length);
 
-    // 簡化版 3x3 平滑
+    // 簡化版 3×3 平滑（4 方向鄰居加權平均）
     for (let y = 0; y < MAP_CONFIG.height; y++) {
         for (let x = 0; x < MAP_CONFIG.width; x++) {
             const index = y * MAP_CONFIG.width + x;
-            let sum = moistureBonus[index] * 0.4;  // 中心權重 40%
-            let count = 0.4;
+            let sum = moistureBonus[index] * RIVER_GEN_CONSTANTS.SMOOTH_CENTER_WEIGHT;  // 中心權重
+            let count = RIVER_GEN_CONSTANTS.SMOOTH_CENTER_WEIGHT;
 
             // 4 方向鄰居
             const neighbors = [
@@ -510,8 +566,8 @@ export function applyHydrologyToMoistureAdvanced(strength = 1.0, spreadRadius = 
 
                 if (nx >= 0 && nx < MAP_CONFIG.width && ny >= 0 && ny < MAP_CONFIG.height) {
                     const neighborIndex = ny * MAP_CONFIG.width + nx;
-                    sum += moistureBonus[neighborIndex] * 0.15;  // 鄰居權重 15% 各
-                    count += 0.15;
+                    sum += moistureBonus[neighborIndex] * RIVER_GEN_CONSTANTS.SMOOTH_NEIGHBOR_WEIGHT;  // 鄰居權重
+                    count += RIVER_GEN_CONSTANTS.SMOOTH_NEIGHBOR_WEIGHT;
                 }
             }
 
@@ -521,7 +577,7 @@ export function applyHydrologyToMoistureAdvanced(strength = 1.0, spreadRadius = 
 
     // 應用濕度增量到實際 moisture 陣列
     for (let i = 0; i < mapData.moisture.length; i++) {
-        if (smoothed[i] > 0.001) {
+        if (smoothed[i] > RIVER_GEN_CONSTANTS.MOISTURE_INCREMENT_EPSILON) {
             const oldMoisture = mapData.moisture[i];
             mapData.moisture[i] = Math.min(1.0, oldMoisture + smoothed[i]);
 

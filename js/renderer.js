@@ -1,10 +1,20 @@
 /**
- * 渲染模組
+ * ========================================
+ * Phase 14.5: 渲染模組（專業版）
+ * ========================================
  * 負責將地形和雲層渲染到 Canvas
+ * 支援多種視覺化模式和河流增強效果
+ *
+ * @module renderer
  */
 
 import noise from './noise.js';
-import { MAP_CONFIG, terrainConfig, getBiomeColor } from './config.js';
+import {
+    MAP_CONFIG,
+    terrainConfig,
+    getBiomeColor,
+    RENDER_CONSTANTS
+} from './config.js';
 import { mapData, getHeight } from './terrain.js';
 
 // Canvas 元素和上下文
@@ -97,17 +107,19 @@ function temperatureGradient(value) {
 /**
  * 顏色生成輔助函數：水流累積量梯度（白色到深藍色）
  * Phase 8: 河流視覺化
+ * 使用指數縮放強調小河流，創造更清晰的視覺對比
+ *
  * @param {number} value - 0-1 的正規化 flux 值
- * @returns {Array<number>} RGB 陣列
+ * @returns {Array<number>} RGB 陣列 [r, g, b]
  */
 function fluxGradient(value) {
     // 白色 (無水流) → 淺藍 → 深藍 (河流)
-    // 使用對數縮放來強調河流
-    const intensity = Math.pow(value, 0.3);  // 使用指數壓縮讓小河流更明顯
+    // 使用指數縮放來強調小河流（提升可見性）
+    const intensity = Math.pow(value, RENDER_CONSTANTS.FLUX_GRADIENT_EXPONENT);
 
-    const r = Math.floor((1 - intensity) * 255);
-    const g = Math.floor((1 - intensity * 0.6) * 255);
-    const b = Math.floor(200 + intensity * 55);  // 保持偏藍色調
+    const r = Math.floor((1 - intensity) * RENDER_CONSTANTS.RGB_MAX);
+    const g = Math.floor((1 - intensity * RENDER_CONSTANTS.FLUX_INTENSITY_FACTOR) * RENDER_CONSTANTS.RGB_MAX);
+    const b = Math.floor(RENDER_CONSTANTS.FLUX_BLUE_BASE + intensity * RENDER_CONSTANTS.FLUX_BLUE_RANGE);
 
     return [r, g, b];
 }
@@ -126,9 +138,9 @@ export function renderTerrain() {
         maxFlux = Math.max(1, ...mapData.flux);  // 防止除以 0
     }
 
-    // Phase 9.9: 定義河流寬度閾值
-    const MEDIUM_RIVER_THRESHOLD = maxFlux * 0.15;  // 前 15% 為中型河流
-    const LARGE_RIVER_THRESHOLD = maxFlux * 0.30;   // 前 30% 為大型河流
+    // Phase 9.9: 定義河流寬度閾值（基於 flux 百分位數）
+    const MEDIUM_RIVER_THRESHOLD = maxFlux * RENDER_CONSTANTS.MEDIUM_RIVER_THRESHOLD;
+    const LARGE_RIVER_THRESHOLD = maxFlux * RENDER_CONSTANTS.LARGE_RIVER_THRESHOLD;
 
     for (let y = 0; y < MAP_CONFIG.height; y++) {
         for (let x = 0; x < MAP_CONFIG.width; x++) {
@@ -173,13 +185,13 @@ export function renderTerrain() {
                         // 街機風格顏色方案：完全不透明，高飽和度
                         if (flux >= LARGE_RIVER_THRESHOLD) {
                             // 大河流：白藍色調（反射效果）
-                            color = [224, 255, 255];  // #E0FFFF - 極亮
+                            color = RENDER_CONSTANTS.RIVER_COLOR_LARGE;
                         } else if (flux >= MEDIUM_RIVER_THRESHOLD) {
                             // 中型河流：深天空藍
-                            color = [0, 191, 255];    // #00BFFF - 亮藍
+                            color = RENDER_CONSTANTS.RIVER_COLOR_MEDIUM;
                         } else {
                             // 小河流：亮青色
-                            color = [0, 255, 255];    // #00FFFF - 純青
+                            color = RENDER_CONSTANTS.RIVER_COLOR_SMALL;
                         }
                         // 完全替換，無混合！
                     }
@@ -187,11 +199,12 @@ export function renderTerrain() {
             }
 
             // 陰影效果（僅在生物群系模式下應用）
+            // 模擬左側光源，創造立體感
             let shadow = 1;
             if (currentRenderMode === 'biome' && x > 0) {
                 const leftHeight = getHeight(x - 1, y);
-                if (leftHeight > height + 0.02) {
-                    shadow = 0.8;
+                if (leftHeight > height + RENDER_CONSTANTS.SHADOW_HEIGHT_THRESHOLD) {
+                    shadow = RENDER_CONSTANTS.SHADOW_INTENSITY;
                 }
             }
 
@@ -321,11 +334,20 @@ function expandRivers(data, maxFlux, mediumThreshold, largeThreshold) {
 
 /**
  * 渲染雲層到 Canvas
+ * 生成動態雲層效果，寬度為地圖2倍以支援無縫滾動
+ *
+ * @throws {Error} 如果 Canvas 上下文未初始化
  */
 export function renderClouds() {
-    noise.init(terrainConfig.seed + 999);  // 使用不同的種子
+    if (!cloudCtx) {
+        console.error('❌ renderClouds(): Canvas 上下文未初始化');
+        return;
+    }
 
-    const width = MAP_CONFIG.width * 2;  // 雲層寬度為地圖的兩倍（用於無縫滾動）
+    // 使用不同的種子生成獨立的雲層模式
+    noise.init(terrainConfig.seed + RENDER_CONSTANTS.CLOUD_SEED_OFFSET);
+
+    const width = MAP_CONFIG.width * RENDER_CONSTANTS.CLOUD_WIDTH_MULTIPLIER;  // 雙倍寬度（無縫滾動）
     const height = MAP_CONFIG.height;
 
     const imgData = cloudCtx.createImageData(width, height);
@@ -333,18 +355,19 @@ export function renderClouds() {
 
     for (let y = 0; y < height; y++) {
         for (let x = 0; x < width; x++) {
-            // 使用 FBM 生成雲層
-            const cloudValue = noise.fbm(x, y, 3, 100, 0);
+            // 使用 FBM 生成雲層噪聲
+            const cloudValue = noise.fbm(x, y, RENDER_CONSTANTS.CLOUD_OCTAVES, RENDER_CONSTANTS.CLOUD_SCALE, 0);
 
             const index = (y * width + x) * 4;
 
             // 白色雲層
-            data[index] = 255;
-            data[index + 1] = 255;
-            data[index + 2] = 255;
+            data[index] = RENDER_CONSTANTS.RGB_MAX;
+            data[index + 1] = RENDER_CONSTANTS.RGB_MAX;
+            data[index + 2] = RENDER_CONSTANTS.RGB_MAX;
 
-            // 根據噪聲值設定透明度
-            data[index + 3] = cloudValue > 0.6 ? (cloudValue - 0.6) * 400 : 0;
+            // 根據噪聲值設定透明度（閾值過濾）
+            data[index + 3] = cloudValue > RENDER_CONSTANTS.CLOUD_THRESHOLD ?
+                             (cloudValue - RENDER_CONSTANTS.CLOUD_THRESHOLD) * RENDER_CONSTANTS.CLOUD_ALPHA_MULTIPLIER : 0;
         }
     }
 
