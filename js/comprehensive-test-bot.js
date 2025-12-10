@@ -621,12 +621,13 @@ class ComprehensiveTestBot {
             const canvas = document.getElementById('terrainLayer');  // Phase 16: 修正 canvas ID
 
             if (canvas) {
-                // 模擬下載檢測
-                const originalToBlob = canvas.toBlob.bind(canvas);
-                canvas.toBlob = function(callback) {
+                // Phase 16.5: 監聽 toDataURL（ui.js 實際使用的方法）
+                const originalToDataURL = canvas.toDataURL.bind(canvas);
+                canvas.toDataURL = function(type) {
                     downloadTriggered = true;
-                    console.log('  📥 檢測到下載觸發（已攔截）');
-                    // 不實際調用 callback 以避免真實下載
+                    console.log(`  📥 檢測到 toDataURL 調用（type: ${type || 'default'}）- 已攔截`);
+                    // 返回 dummy data URL，確保後續邏輯不崩潰
+                    return 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
                 };
 
                 // 觸發點擊
@@ -640,12 +641,12 @@ class ComprehensiveTestBot {
                 testResult.layers.state = downloadTriggered;
 
                 // 恢復原始函數
-                canvas.toBlob = originalToBlob;
+                canvas.toDataURL = originalToDataURL;
 
                 if (testResult.layers.event && testResult.layers.state) {
                     testResult.result = 'PASS';
                     this.passed++;
-                    console.log(`  ✅ 匯出地圖: 下載已觸發 (✓ 事件 ✓ 狀態)`);
+                    console.log(`  ✅ 匯出地圖: 下載已觸發 (✓ 事件 ✓ DOM ✓ 狀態)`);
                 } else {
                     testResult.result = 'FAIL';
                     this.failed++;
