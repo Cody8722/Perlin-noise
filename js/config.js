@@ -101,6 +101,14 @@ export const RIVER_GEN_CONSTANTS = {
     MAX_DROPLET_ITERATIONS: 1000,        // 單個水滴最大迭代次數（防止無限迴圈）
     DEFAULT_DROPLET_COUNT: 10000,        // 預設水滴數量
 
+    // Phase 18: 水力侵蝕參數（Hydraulic Erosion）
+    EROSION_RATE: 0.003,                 // 侵蝕率（下坡時削減高度）
+    DEPOSITION_RATE: 0.008,              // 沉積率（填坑時增加高度）
+    MIN_SLOPE_FOR_EROSION: 0.01,         // 最小坡度閾值（低於此值不侵蝕）
+    EVAPORATION_RATE: 0.02,              // 蒸發率（水滴每步損失水量）
+    INITIAL_WATER_VOLUME: 1.0,           // 水滴初始水量
+    MIN_WATER_VOLUME: 0.01,              // 最小水量（低於此值水滴消失）
+
     // Flux 到濕度的轉換係數
     FLUX_TO_MOISTURE_COEFF: 0.005,       // Flux 轉濕度獎勵係數
     MAX_MOISTURE_BONUS: 0.5,             // 單個像素最大濕度獎勵

@@ -379,13 +379,18 @@ export function generateRivers(numDroplets = RIVER_GEN_CONSTANTS.DEFAULT_DROPLET
 }
 
 /**
- * 模擬單個水滴的流動路徑（貪婪下坡算法）
+ * 模擬單個水滴的流動路徑（貪婪下坡算法 + Phase 18: 水力侵蝕）
  * 水滴從起點開始，每步選擇 8 方向中最低的鄰居移動
+ *
+ * Phase 18 新增功能：
+ * - 侵蝕（Erosion）：下坡時削減地形高度，切割河谷
+ * - 沉積（Deposition）：局部窪地時填充高度，使水溢出連接河流
+ * - 蒸發（Evaporation）：水滴逐漸損失水量，最終消失
  *
  * 終止條件：
  * 1. 到達海洋（height <= seaLevel）
  * 2. 進入已訪問過的位置（檢測循環）
- * 3. 到達局部窪地（無更低的鄰居）
+ * 3. 水量耗盡（蒸發殆盡）
  * 4. 達到最大迭代次數（防止無限迴圈）
  *
  * @param {number} startX - 起始 X 座標
@@ -396,6 +401,7 @@ function simulateDroplet(startX, startY) {
     let x = startX;
     let y = startY;
     let pathLength = 0;
+    let waterVolume = RIVER_GEN_CONSTANTS.INITIAL_WATER_VOLUME;  // Phase 18: 水滴攜帶的水量
 
     // 訪問紀錄（防止循環）- 使用 Set 提供 O(1) 查找
     const visited = new Set();
@@ -403,18 +409,23 @@ function simulateDroplet(startX, startY) {
 
     while (pathLength < RIVER_GEN_CONSTANTS.MAX_DROPLET_ITERATIONS) {
         const currentHeight = getHeight(x, y);
+        const currentIndex = y * MAP_CONFIG.width + x;
 
         // 終止條件 1：到達海洋
         if (currentHeight <= terrainConfig.seaLevel) {
             break;
         }
 
+        // 終止條件 2：水量耗盡（蒸發）
+        if (waterVolume < RIVER_GEN_CONSTANTS.MIN_WATER_VOLUME) {
+            break;
+        }
+
         // 記錄當前位置的 flux
-        const index = y * MAP_CONFIG.width + x;
-        mapData.flux[index] += 1;
+        mapData.flux[currentIndex] += 1;
         pathLength++;
 
-        // 終止條件 2：已訪問過（檢測循環）
+        // 終止條件 3：已訪問過（檢測循環）
         const key = makeKey(x, y);
         if (visited.has(key)) {
             break;
@@ -451,15 +462,35 @@ function simulateDroplet(startX, startY) {
             }
         }
 
-        // 終止條件 3：局部最小值（無法下降）
+        // Phase 18: 水力侵蝕與沉積邏輯
         if (nextX === x && nextY === y) {
-            // 當前位置是局部窪地，水滴在此停止
+            // 局部窪地（Local Minima）：無更低的鄰居
+            // 沉積（Deposition）：填充坑洞，使水能溢出
+            mapData.height[currentIndex] += RIVER_GEN_CONSTANTS.DEPOSITION_RATE * waterVolume;
+
+            // 水滴在窪地停止（已填充，下一個水滴會繼續前進）
             break;
+        } else {
+            // 有下坡路徑：計算坡度並決定是否侵蝕
+            const slope = currentHeight - lowestHeight;
+
+            if (slope > RIVER_GEN_CONSTANTS.MIN_SLOPE_FOR_EROSION) {
+                // 侵蝕（Erosion）：陡峭坡度時削減地形，切割河谷
+                mapData.height[currentIndex] -= RIVER_GEN_CONSTANTS.EROSION_RATE * waterVolume;
+
+                // 確保不會侵蝕到海平面以下
+                if (mapData.height[currentIndex] < terrainConfig.seaLevel) {
+                    mapData.height[currentIndex] = terrainConfig.seaLevel;
+                }
+            }
+
+            // 移動到下一個位置
+            x = nextX;
+            y = nextY;
         }
 
-        // 移動到下一個位置
-        x = nextX;
-        y = nextY;
+        // 蒸發（Evaporation）：水滴每步損失水量
+        waterVolume *= (1 - RIVER_GEN_CONSTANTS.EVAPORATION_RATE);
     }
 
     return pathLength;
