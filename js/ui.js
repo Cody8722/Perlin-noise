@@ -238,6 +238,7 @@ export function initUI() {
     // 綁定雲層切換
     const cloudCheckbox = document.getElementById('chk_clouds');
     cloudCheckbox.addEventListener('change', () => {
+        terrainConfig.showClouds = cloudCheckbox.checked;  // Phase 16: 狀態同步
         toggleClouds(cloudCheckbox.checked);
     });
 

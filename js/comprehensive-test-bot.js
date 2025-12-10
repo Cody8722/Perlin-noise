@@ -618,7 +618,7 @@ class ComprehensiveTestBot {
 
             // 監聽下載觸發（不實際下載）
             let downloadTriggered = false;
-            const canvas = document.getElementById('canvas');
+            const canvas = document.getElementById('terrainLayer');  // Phase 16: 修正 canvas ID
 
             if (canvas) {
                 // 模擬下載檢測

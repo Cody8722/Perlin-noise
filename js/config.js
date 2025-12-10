@@ -227,7 +227,8 @@ export const terrainConfig = {
     riverDensity: deviceConfig.riverDensity,  // Phase 14: 智能預設值（移動15k/桌面50k）
     riverThreshold: 5,         // Phase 8: 河流顯示閾值（最小 flux 值）
     irrigationStrength: 1.0,   // Phase 9: 灌溉強度（0.0-5.0，河流對濕度的影響）
-    useAdvancedIrrigation: true // Phase 9: 使用進階灌溉（擴散到鄰居）
+    useAdvancedIrrigation: true, // Phase 9: 使用進階灌溉（擴散到鄰居）
+    showClouds: true           // Phase 16: 雲層顯示狀態（預設顯示）
 };
 
 // 生物群系顏色配置（Whittaker 分類系統擴展）
