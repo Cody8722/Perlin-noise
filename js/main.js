@@ -8,6 +8,7 @@ import { generateTerrain, getHeight, getMoisture, getTemperature } from './terra
 import { initUI } from './ui.js';
 import noise from './noise.js';
 import { terrainConfig, getBiomeColor } from './config.js';
+import comprehensiveTestBot from './comprehensive-test-bot.js';  // Phase 12.5: 綜合測試機器人
 
 /**
  * ========================================
@@ -170,7 +171,14 @@ function exposeTestAPIs() {
     window.RPGWorldGen.generateTerrain = generateTerrain;
     window.RPGWorldGen.renderAll = renderAll;
 
+    // Phase 12.5: 暴露綜合測試機器人
+    window.RPGWorldGen.comprehensiveTestBot = comprehensiveTestBot;
+
     console.log('🔧 測試 API 已暴露到全域作用域');
+    console.log('   - terrainConfig');
+    console.log('   - RPGWorldGen.generateTerrain()');
+    console.log('   - RPGWorldGen.renderAll()');
+    console.log('   - runComprehensiveTest() ← Phase 12.5 綜合測試');
 }
 
 // 等待 DOM 載入完成後執行
