@@ -9,6 +9,51 @@ export const MAP_CONFIG = {
     height: 200
 };
 
+/**
+ * Phase 14: 性能限制配置（基於 Phase 13 壓力測試結果）
+ *
+ * 測試結果：
+ * - ✅ 200,000 滴水：線性擴展成功（<400ms）
+ * - ✅ 無記憶體洩漏
+ * - ✅ O(N) 線性效能
+ */
+export const PERFORMANCE_LIMITS = {
+    MAX_RIVER_DENSITY: 200000,      // 最大安全上限（壓測驗證）
+    RECOMMENDED_DESKTOP: 50000,     // 建議桌面預設值
+    RECOMMENDED_MOBILE: 15000,      // 建議移動設備預設值
+    MIN_RIVER_DENSITY: 1000,        // 最小有意義值
+    PANIC_THRESHOLD: 5000           // 安全停止閾值（毫秒）
+};
+
+/**
+ * Phase 14: 設備檢測與智能預設值
+ * 根據螢幕寬度自動偵測設備類型並調整效能參數
+ *
+ * @returns {Object} 設備配置 { type, riverDensity, label }
+ */
+function detectDeviceType() {
+    const width = window.innerWidth || 1024;  // 預設桌面寬度
+    const isMobile = width < 768;
+
+    if (isMobile) {
+        return {
+            type: 'mobile',
+            riverDensity: PERFORMANCE_LIMITS.RECOMMENDED_MOBILE,
+            label: '📱 移動設備'
+        };
+    } else {
+        return {
+            type: 'desktop',
+            riverDensity: PERFORMANCE_LIMITS.RECOMMENDED_DESKTOP,
+            label: '🖥️ 桌面設備'
+        };
+    }
+}
+
+// Phase 14: 執行設備檢測
+const deviceConfig = detectDeviceType();
+console.log(`🎯 設備檢測: ${deviceConfig.label} → 河流密度預設值: ${deviceConfig.riverDensity.toLocaleString()}`);
+
 // 地形生成參數
 export const terrainConfig = {
     seed: Math.floor(Math.random() * 5000),
@@ -17,7 +62,7 @@ export const terrainConfig = {
     seaLevel: 0.35,
     moistureOffset: 0,
     temperatureOffset: 0,      // 溫度偏移（-0.5 到 0.5，模擬冰河期/暖化）
-    riverDensity: 10000,       // Phase 8: 河流密度（水滴數量，1000-50000）
+    riverDensity: deviceConfig.riverDensity,  // Phase 14: 智能預設值（移動15k/桌面50k）
     riverThreshold: 5,         // Phase 8: 河流顯示閾值（最小 flux 值）
     irrigationStrength: 1.0,   // Phase 9: 灌溉強度（0.0-5.0，河流對濕度的影響）
     useAdvancedIrrigation: true // Phase 9: 使用進階灌溉（擴散到鄰居）

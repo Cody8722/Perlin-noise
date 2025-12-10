@@ -166,6 +166,37 @@ export function initUI() {
         updateConfig('useAdvancedIrrigation', advancedIrrigationCheckbox.checked);
     });
 
+    // Phase 14: 初始化所有滑桿值（同步 terrainConfig → HTML）
+    // 確保 HTML 滑桿反映設備偵測後的智能預設值
+    document.getElementById('inp_scale').value = terrainConfig.scale;
+    document.getElementById('val_scale').textContent = terrainConfig.scale;
+
+    document.getElementById('inp_octaves').value = terrainConfig.octaves;
+    document.getElementById('val_octaves').textContent = terrainConfig.octaves;
+
+    document.getElementById('inp_sea').value = terrainConfig.seaLevel;
+    document.getElementById('val_sea').textContent = terrainConfig.seaLevel;
+
+    document.getElementById('inp_moist').value = terrainConfig.moistureOffset;
+    document.getElementById('val_moist').textContent = terrainConfig.moistureOffset;
+
+    document.getElementById('inp_temp').value = terrainConfig.temperatureOffset;
+    document.getElementById('val_temp').textContent = terrainConfig.temperatureOffset;
+
+    // 重要：河流密度會根據設備類型自動設定（移動15k/桌面50k）
+    document.getElementById('inp_river_density').value = terrainConfig.riverDensity;
+    document.getElementById('val_river_density').textContent = terrainConfig.riverDensity;
+
+    riverThresholdInput.value = terrainConfig.riverThreshold;
+    riverThresholdDisplay.textContent = terrainConfig.riverThreshold;
+
+    irrigationInput.value = terrainConfig.irrigationStrength;
+    irrigationDisplay.textContent = terrainConfig.irrigationStrength.toFixed(1);
+
+    advancedIrrigationCheckbox.checked = terrainConfig.useAdvancedIrrigation;
+
+    console.log('📊 滑桿已同步至配置值');
+
     // 綁定生成河流按鈕（Phase 9.5: 加入生態回饋 + 平滑）
     const generateRiversBtn = document.getElementById('btnGenerateRivers');
     generateRiversBtn.addEventListener('click', () => {
