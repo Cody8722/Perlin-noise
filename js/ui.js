@@ -6,6 +6,7 @@
 import { MAP_CONFIG, terrainConfig, updateConfig, generateNewSeed, setSeed, getBiomeName } from './config.js';
 import { generateTerrain, getTerrainData, generateRivers, applyHydrologyToMoisture, applyHydrologyToMoistureAdvanced } from './terrain.js';
 import { renderTerrain, toggleClouds, setRenderMode, getRenderMode } from './renderer.js';
+import { saveState, exportConfigToJSON, importConfigFromJSON, resetToDefaults, initStateManager } from './state-manager.js';
 
 // 防抖計時器
 let debounceTimer;
@@ -13,12 +14,15 @@ let debounceTimer;
 /**
  * 防抖渲染
  * 避免頻繁更新時過度渲染
+ * Phase 17: 添加自動保存功能
  */
 function debouncedRender() {
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
         generateTerrain();
         renderTerrain();
+        // Phase 17: 自動保存配置到 LocalStorage
+        saveState();
     }, 50);
 }
 
@@ -250,6 +254,12 @@ export function initUI() {
 
     // 綁定匯出按鈕
     initExportButton();
+
+    // Phase 17: 初始化配置管理功能
+    initConfigManagement();
+
+    // Phase 17: 載入已保存的配置（如果存在）
+    initStateManager();
 }
 
 /**
@@ -409,10 +419,81 @@ function initMapHover() {
 }
 
 /**
+ * Phase 17: 初始化配置管理功能
+ * 處理保存/載入/重置按鈕
+ */
+function initConfigManagement() {
+    // 保存配置按鈕（匯出 JSON）
+    const saveBtn = document.getElementById('btnSaveConfig');
+    saveBtn.addEventListener('click', () => {
+        const success = exportConfigToJSON();
+        if (success) {
+            // 視覺回饋
+            const originalText = saveBtn.textContent;
+            saveBtn.textContent = '✓ 已保存！';
+            saveBtn.style.background = 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)';
+            setTimeout(() => {
+                saveBtn.textContent = originalText;
+                saveBtn.style.background = '';
+            }, 2000);
+        }
+    });
+
+    // 載入配置按鈕（觸發檔案選擇器）
+    const loadBtn = document.getElementById('btnLoadConfig');
+    const fileInput = document.getElementById('configFileInput');
+
+    loadBtn.addEventListener('click', () => {
+        fileInput.click();
+    });
+
+    fileInput.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            const success = await importConfigFromJSON(file);
+            if (success) {
+                // 視覺回饋
+                const originalText = loadBtn.textContent;
+                loadBtn.textContent = '✓ 已載入！';
+                loadBtn.style.background = 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)';
+                setTimeout(() => {
+                    loadBtn.textContent = originalText;
+                    loadBtn.style.background = '';
+                }, 2000);
+            }
+            // 清空 input，允許重複載入同一檔案
+            fileInput.value = '';
+        }
+    });
+
+    // 重置按鈕（確認後執行）
+    const resetBtn = document.getElementById('btnResetConfig');
+    resetBtn.addEventListener('click', () => {
+        const confirmed = confirm(
+            '確定要重置到預設配置嗎？\n\n這將清除所有已保存的設定，且無法復原。'
+        );
+
+        if (confirmed) {
+            const success = resetToDefaults();
+            if (success) {
+                // 視覺回饋
+                const originalText = resetBtn.textContent;
+                resetBtn.textContent = '✓ 已重置！';
+                setTimeout(() => {
+                    resetBtn.textContent = originalText;
+                }, 2000);
+            }
+        }
+    });
+}
+
+/**
  * 導出生成新世界的函數供外部調用
  */
 export function generateNewWorld() {
     generateNewSeed();
     generateTerrain();
     renderTerrain();
+    // Phase 17: 自動保存新世界的配置
+    saveState();
 }
