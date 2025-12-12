@@ -150,10 +150,16 @@ export const RENDER_CONSTANTS = {
     LARGE_RIVER_THRESHOLD: 0.30,         // 前 30% flux 為大型河流
     VERY_LARGE_RIVER_THRESHOLD: 0.50,    // 前 50% flux 為超大河流
 
-    // 河流顏色（RGB）- "文明" 風格
-    RIVER_COLOR_SMALL: [0, 255, 255],     // 小河流：純青色 (#00FFFF)
-    RIVER_COLOR_MEDIUM: [0, 191, 255],    // 中型河流：深天空藍 (#00BFFF)
-    RIVER_COLOR_LARGE: [224, 255, 255],   // 大河流：極亮白藍 (#E0FFFF)
+    // Phase 18.9: 河流顏色（自然藍色）- 從霓虹色改為自然色
+    RIVER_COLOR_SMALL: [100, 180, 230],   // 小河流：淺藍 (#64B4E6)
+    RIVER_COLOR_MEDIUM: [70, 150, 220],   // 中型河流：中藍 (#4696DC)
+    RIVER_COLOR_LARGE: [40, 100, 180],    // 大河流：深藍 (#2864B4)
+
+    // Phase 18.9: 河流 Alpha 透明度（0-1）
+    RIVER_ALPHA_SMALL: 0.6,              // 小河流：60% 不透明（讓地形顏色透出）
+    RIVER_ALPHA_MEDIUM: 0.75,            // 中型河流：75% 不透明
+    RIVER_ALPHA_LARGE: 0.9,              // 大河流：90% 不透明（接近完全不透明）
+    RIVER_ALPHA_EDGE: 0.35,              // 河流邊緣：35% 不透明（抗鋸齒效果）
 
     // 河流擴展尺寸（像素）
     RIVER_EXPAND_SMALL: 1,               // 小河流：單像素

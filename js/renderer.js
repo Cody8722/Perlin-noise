@@ -180,20 +180,28 @@ export function renderTerrain() {
                     // 生物群系視圖（預設）
                     color = getBiomeColor(height, moisture, temperature);
 
-                    // Phase 9.99: 「文明」風格河流（100% 不透明、極亮）
+                    // Phase 18.9: 自然河流（alpha 混合）
                     if (flux >= terrainConfig.riverThreshold && height > terrainConfig.seaLevel) {
-                        // 街機風格顏色方案：完全不透明，高飽和度
+                        const biomeColor = color;  // 保存原始生物群系顏色
+                        let riverColor;
+                        let riverAlpha;
+
                         if (flux >= LARGE_RIVER_THRESHOLD) {
-                            // 大河流：白藍色調（反射效果）
-                            color = RENDER_CONSTANTS.RIVER_COLOR_LARGE;
+                            // 大河流：深藍（90% 不透明）
+                            riverColor = RENDER_CONSTANTS.RIVER_COLOR_LARGE;
+                            riverAlpha = RENDER_CONSTANTS.RIVER_ALPHA_LARGE;
                         } else if (flux >= MEDIUM_RIVER_THRESHOLD) {
-                            // 中型河流：深天空藍
-                            color = RENDER_CONSTANTS.RIVER_COLOR_MEDIUM;
+                            // 中型河流：中藍（75% 不透明）
+                            riverColor = RENDER_CONSTANTS.RIVER_COLOR_MEDIUM;
+                            riverAlpha = RENDER_CONSTANTS.RIVER_ALPHA_MEDIUM;
                         } else {
-                            // 小河流：亮青色
-                            color = RENDER_CONSTANTS.RIVER_COLOR_SMALL;
+                            // 小河流：淺藍（60% 不透明）
+                            riverColor = RENDER_CONSTANTS.RIVER_COLOR_SMALL;
+                            riverAlpha = RENDER_CONSTANTS.RIVER_ALPHA_SMALL;
                         }
-                        // 完全替換，無混合！
+
+                        // Alpha 混合：河流顏色與生物群系顏色融合
+                        color = blendColors(riverColor, biomeColor, riverAlpha);
                     }
                     break;
             }
@@ -223,6 +231,25 @@ export function renderTerrain() {
     }
 
     terrainCtx.putImageData(imgData, 0, 0);
+}
+
+/**
+ * Phase 18.9: Alpha 混合函數
+ * 混合兩個 RGB 顏色，使用標準 alpha 合成公式
+ *
+ * 公式：result = foreground * alpha + background * (1 - alpha)
+ *
+ * @param {Array<number>} foreground - 前景色 [r, g, b]
+ * @param {Array<number>} background - 背景色 [r, g, b]
+ * @param {number} alpha - 透明度 (0-1，0=完全透明，1=完全不透明)
+ * @returns {Array<number>} 混合後的顏色 [r, g, b]
+ */
+function blendColors(foreground, background, alpha) {
+    return [
+        Math.round(foreground[0] * alpha + background[0] * (1 - alpha)),
+        Math.round(foreground[1] * alpha + background[1] * (1 - alpha)),
+        Math.round(foreground[2] * alpha + background[2] * (1 - alpha))
+    ];
 }
 
 /**
@@ -307,7 +334,7 @@ function expandRivers(data, maxFlux, mediumThreshold, largeThreshold) {
             }
             // riverSize === 1 時不擴展
 
-            // 應用擴展模式（Phase 9.99: 完全覆蓋，無混合）
+            // Phase 18.9: 應用擴展模式（使用 alpha 混合 + 邊緣抗鋸齒）
             for (const { dx, dy } of expandPattern) {
                 const nx = x + dx;
                 const ny = y + dy;
@@ -320,11 +347,37 @@ function expandRivers(data, maxFlux, mediumThreshold, largeThreshold) {
                     if (riverMarkers[neighborIndex] < riverSize) {
                         const neighborPixelIndex = neighborIndex * 4;
 
-                        // Phase 9.99: 完全覆蓋（100% 不透明）
-                        data[neighborPixelIndex] = riverR;
-                        data[neighborPixelIndex + 1] = riverG;
-                        data[neighborPixelIndex + 2] = riverB;
-                        // Alpha 保持 255（已設定）
+                        // 獲取現有背景顏色
+                        const bgR = data[neighborPixelIndex];
+                        const bgG = data[neighborPixelIndex + 1];
+                        const bgB = data[neighborPixelIndex + 2];
+
+                        // Phase 18.9: 計算邊緣距離（曼哈頓距離）
+                        const distance = Math.abs(dx) + Math.abs(dy);
+                        const maxDistance = riverSize === 4 ? 4 : (riverSize === 3 ? 3 : 2);
+
+                        // 邊緣像素使用較低 alpha（抗鋸齒效果）
+                        let alpha;
+                        if (distance >= maxDistance - 1) {
+                            // 邊緣：35% 不透明
+                            alpha = RENDER_CONSTANTS.RIVER_ALPHA_EDGE;
+                        } else {
+                            // 中心：根據河流大小使用不同 alpha
+                            if (riverSize === 4) {
+                                alpha = RENDER_CONSTANTS.RIVER_ALPHA_LARGE;
+                            } else if (riverSize === 3) {
+                                alpha = RENDER_CONSTANTS.RIVER_ALPHA_LARGE;
+                            } else {
+                                alpha = RENDER_CONSTANTS.RIVER_ALPHA_MEDIUM;
+                            }
+                        }
+
+                        // Alpha 混合
+                        const blended = blendColors([riverR, riverG, riverB], [bgR, bgG, bgB], alpha);
+                        data[neighborPixelIndex] = blended[0];
+                        data[neighborPixelIndex + 1] = blended[1];
+                        data[neighborPixelIndex + 2] = blended[2];
+                        // Alpha 通道保持 255（完全不透明的混合結果）
                     }
                 }
             }
