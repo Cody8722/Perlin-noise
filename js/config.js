@@ -124,6 +124,19 @@ export const RIVER_GEN_CONSTANTS = {
 };
 
 // ========================================
+// Phase 18.95: 進度回饋與湖泊生成
+// ========================================
+export const PROGRESS_CONSTANTS = {
+    CHUNK_SIZE: 500,                     // 每次處理的水滴數（分塊避免 UI 凍結）
+    UPDATE_INTERVAL: 16                  // 進度更新間隔（ms，~60fps）
+};
+
+export const LAKE_CONSTANTS = {
+    MIN_LAKE_DEPTH: 0.02,                // 最小湖泊深度（窪地填充閾值）
+    LAKE_MARKER_VALUE: -1                // 湖泊標記值（在 flux 陣列中）
+};
+
+// ========================================
 // Phase 14.5: 高斯平滑核（Gaussian Kernel）
 // ========================================
 /**
@@ -160,6 +173,10 @@ export const RENDER_CONSTANTS = {
     RIVER_ALPHA_MEDIUM: 0.75,            // 中型河流：75% 不透明
     RIVER_ALPHA_LARGE: 0.9,              // 大河流：90% 不透明（接近完全不透明）
     RIVER_ALPHA_EDGE: 0.35,              // 河流邊緣：35% 不透明（抗鋸齒效果）
+
+    // Phase 18.95: 湖泊顏色（深邃靜水藍）
+    LAKE_COLOR: [30, 80, 140],           // 湖泊：深沉藍 (#1E508C)
+    LAKE_ALPHA: 0.85                     // 湖泊：85% 不透明（比河流更深沉）
 
     // 河流擴展尺寸（像素）
     RIVER_EXPAND_SMALL: 1,               // 小河流：單像素

@@ -18,7 +18,9 @@ import {
     terrainConfig,
     TERRAIN_GEN_CONSTANTS,
     RIVER_GEN_CONSTANTS,
-    GAUSSIAN_KERNEL_3X3
+    GAUSSIAN_KERNEL_3X3,
+    PROGRESS_CONSTANTS,
+    LAKE_CONSTANTS
 } from './config.js';
 
 // 地圖資料儲存
@@ -27,7 +29,8 @@ export const mapData = {
     moisture: new Float32Array(MAP_CONFIG.width * MAP_CONFIG.height),
     baseMoisture: new Float32Array(MAP_CONFIG.width * MAP_CONFIG.height),  // Phase 11: 不可變的原始濕度（防止累積突變）
     temperature: new Float32Array(MAP_CONFIG.width * MAP_CONFIG.height),
-    flux: new Float32Array(MAP_CONFIG.width * MAP_CONFIG.height)  // 水流累積量
+    flux: new Float32Array(MAP_CONFIG.width * MAP_CONFIG.height),  // 水流累積量
+    lakes: new Uint8Array(MAP_CONFIG.width * MAP_CONFIG.height)    // Phase 18.95: 湖泊標記（0=非湖泊，1=湖泊）
 };
 
 /**
@@ -310,11 +313,14 @@ export function getTerrainData(index) {
  * 4. 終止條件：到達海洋、局部窪地、或最大迭代次數
  *
  * Phase 12: 確保完全確定性（使用種子化 RNG）
+ * Phase 18.95: 添加進度回饋支援
  *
  * @param {number} [numDroplets=10000] - 水滴數量（建議範圍：1000-200000）
+ * @param {function} [onProgress=null] - 進度回調函數 (progress: 0-1)
+ * @returns {Promise<void>} 完成時解析
  * @throws {RangeError} 如果 numDroplets < 0
  */
-export function generateRivers(numDroplets = RIVER_GEN_CONSTANTS.DEFAULT_DROPLET_COUNT) {
+export async function generateRivers(numDroplets = RIVER_GEN_CONSTANTS.DEFAULT_DROPLET_COUNT, onProgress = null) {
     // 參數驗證
     if (numDroplets < 0) {
         throw new RangeError(`generateRivers(): numDroplets 必須 >= 0，收到：${numDroplets}`);
@@ -331,8 +337,9 @@ export function generateRivers(numDroplets = RIVER_GEN_CONSTANTS.DEFAULT_DROPLET
     noise.init(terrainConfig.seed);
     console.log(`   🎲 RNG 已重置到種子: ${terrainConfig.seed}`);
 
-    // 重置 flux 資料（清除舊河流）
+    // 重置 flux 和湖泊資料（清除舊河流和湖泊）
     mapData.flux.fill(0);
+    mapData.lakes.fill(0);  // Phase 18.95: 清除舊湖泊
 
     // 生成所有陸地座標列表（快取，避免重複遍歷）
     const landCoords = [];
@@ -351,18 +358,36 @@ export function generateRivers(numDroplets = RIVER_GEN_CONSTANTS.DEFAULT_DROPLET
         return;
     }
 
-    // 模擬每個水滴
+    // Phase 18.95: 分塊處理（避免 UI 凍結）+ 進度回饋
     let successfulDroplets = 0;
-    for (let i = 0; i < numDroplets; i++) {
-        // Phase 12: 使用種子化 RNG（確定性）而非 Math.random()
-        const randomIndex = Math.floor(noise.random() * landCoords.length);
-        const startPos = landCoords[randomIndex];
+    const chunkSize = PROGRESS_CONSTANTS.CHUNK_SIZE;
 
-        // 模擬水滴路徑
-        const pathLength = simulateDroplet(startPos.x, startPos.y);
+    for (let chunkStart = 0; chunkStart < numDroplets; chunkStart += chunkSize) {
+        const chunkEnd = Math.min(chunkStart + chunkSize, numDroplets);
 
-        if (pathLength > 0) {
-            successfulDroplets++;
+        // 處理當前塊
+        for (let i = chunkStart; i < chunkEnd; i++) {
+            // Phase 12: 使用種子化 RNG（確定性）而非 Math.random()
+            const randomIndex = Math.floor(noise.random() * landCoords.length);
+            const startPos = landCoords[randomIndex];
+
+            // 模擬水滴路徑
+            const pathLength = simulateDroplet(startPos.x, startPos.y);
+
+            if (pathLength > 0) {
+                successfulDroplets++;
+            }
+        }
+
+        // 更新進度
+        const progress = chunkEnd / numDroplets;
+        if (onProgress) {
+            onProgress(progress);
+        }
+
+        // 讓出主執行緒（避免 UI 凍結）
+        if (chunkEnd < numDroplets) {
+            await new Promise(resolve => setTimeout(resolve, 0));
         }
     }
 
@@ -467,6 +492,12 @@ function simulateDroplet(startX, startY) {
             // 局部窪地（Local Minima）：無更低的鄰居
             // 沉積（Deposition）：填充坑洞，使水能溢出
             mapData.height[currentIndex] += RIVER_GEN_CONSTANTS.DEPOSITION_RATE * waterVolume;
+
+            // Phase 18.95: 標記為湖泊（靜態水體）
+            // 如果窪地深度足夠且遠離海洋，標記為湖泊
+            if (currentHeight > terrainConfig.seaLevel + LAKE_CONSTANTS.MIN_LAKE_DEPTH) {
+                mapData.lakes[currentIndex] = 1;  // 標記為湖泊
+            }
 
             // 水滴在窪地停止（已填充，下一個水滴會繼續前進）
             break;

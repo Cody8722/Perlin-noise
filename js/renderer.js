@@ -180,8 +180,18 @@ export function renderTerrain() {
                     // 生物群系視圖（預設）
                     color = getBiomeColor(height, moisture, temperature);
 
+                    // Phase 18.95: 湖泊渲染（優先於河流）
+                    if (mapData.lakes[index] === 1 && height > terrainConfig.seaLevel) {
+                        const biomeColor = color;  // 保存原始生物群系顏色
+                        // 湖泊使用深沉靜水藍，區別於流動河流
+                        color = blendColors(
+                            RENDER_CONSTANTS.LAKE_COLOR,
+                            biomeColor,
+                            RENDER_CONSTANTS.LAKE_ALPHA
+                        );
+                    }
                     // Phase 18.9: 自然河流（alpha 混合）
-                    if (flux >= terrainConfig.riverThreshold && height > terrainConfig.seaLevel) {
+                    else if (flux >= terrainConfig.riverThreshold && height > terrainConfig.seaLevel) {
                         const biomeColor = color;  // 保存原始生物群系顏色
                         let riverColor;
                         let riverAlpha;

@@ -161,6 +161,17 @@
         </div>
     </div>
 
+    <!-- Phase 18.95: 進度條覆蓋層 -->
+    <div id="progressOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); z-index: 1000; justify-content: center; align-items: center;">
+        <div style="background: white; padding: 30px; border-radius: 10px; min-width: 300px; text-align: center;">
+            <h3 id="progressTitle" style="margin: 0 0 15px 0; color: #333;">生成中...</h3>
+            <div style="background: #e0e0e0; border-radius: 10px; overflow: hidden; height: 30px; margin-bottom: 10px;">
+                <div id="progressBar" style="background: linear-gradient(90deg, #667eea 0%, #764ba2 100%); height: 100%; width: 0%; transition: width 0.3s ease;"></div>
+            </div>
+            <p id="progressText" style="margin: 0; color: #666; font-size: 14px;">0%</p>
+        </div>
+    </div>
+
     <!-- JavaScript 模組 -->
     <script type="module" src="js/noise.js"></script>
     <script type="module" src="js/config.js"></script>

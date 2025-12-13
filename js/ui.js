@@ -12,6 +12,31 @@ import { saveState, exportConfigToJSON, importConfigFromJSON, resetToDefaults, i
 let debounceTimer;
 
 /**
+ * Phase 18.95: 顯示進度條
+ * @param {string} title - 進度標題
+ * @param {number} progress - 進度值 (0-1)
+ */
+function showProgress(title, progress) {
+    const overlay = document.getElementById('progressOverlay');
+    const titleEl = document.getElementById('progressTitle');
+    const bar = document.getElementById('progressBar');
+    const text = document.getElementById('progressText');
+
+    overlay.style.display = 'flex';
+    titleEl.textContent = title;
+    bar.style.width = `${Math.round(progress * 100)}%`;
+    text.textContent = `${Math.round(progress * 100)}%`;
+}
+
+/**
+ * Phase 18.95: 隱藏進度條
+ */
+function hideProgress() {
+    const overlay = document.getElementById('progressOverlay');
+    overlay.style.display = 'none';
+}
+
+/**
  * 防抖渲染
  * 避免頻繁更新時過度渲染
  * Phase 17: 添加自動保存功能
@@ -201,42 +226,64 @@ export function initUI() {
 
     console.log('📊 滑桿已同步至配置值');
 
-    // 綁定生成河流按鈕（Phase 9.5: 加入生態回饋 + 平滑）
+    // Phase 18.95: 綁定生成河流按鈕（帶進度回饋）
     const generateRiversBtn = document.getElementById('btnGenerateRivers');
-    generateRiversBtn.addEventListener('click', () => {
-        // Step 1: 生成河流網絡
-        generateRivers(terrainConfig.riverDensity);
-
-        // Step 2: Phase 9.5 - 應用水文回饋到濕度層（帶平滑）
-        if (terrainConfig.irrigationStrength > 0) {
-            // 使用 riverThreshold 作為 fluxThreshold（過濾小支流）
-            const fluxThreshold = Math.max(3, terrainConfig.riverThreshold);
-
-            if (terrainConfig.useAdvancedIrrigation) {
-                // 進階版：擴散 + 距離衰減 + 平滑
-                applyHydrologyToMoistureAdvanced(
-                    terrainConfig.irrigationStrength,
-                    2,  // spreadRadius = 2（較寬的河岸綠帶）
-                    fluxThreshold
-                );
-            } else {
-                // 基礎版：3x3 高斯平滑
-                applyHydrologyToMoisture(
-                    terrainConfig.irrigationStrength,
-                    fluxThreshold
-                );
-            }
-        }
-
-        // Step 3: 重繪地形（生物群系會根據新的濕度改變）
-        renderTerrain();
-
-        // 視覺回饋
+    generateRiversBtn.addEventListener('click', async () => {
         const originalText = generateRiversBtn.textContent;
-        generateRiversBtn.textContent = '✅ 河流 + 生態已生成！';
-        setTimeout(() => {
-            generateRiversBtn.textContent = originalText;
-        }, 1500);
+        generateRiversBtn.disabled = true;
+
+        // 顯示進度條
+        showProgress('生成河流網絡...', 0);
+
+        try {
+            // Step 1: 生成河流網絡（帶進度回饋）
+            await generateRivers(terrainConfig.riverDensity, (progress) => {
+                showProgress('生成河流網絡...', progress);
+            });
+
+            showProgress('應用生態回饋...', 0.9);
+
+            // Step 2: Phase 9.5 - 應用水文回饋到濕度層（帶平滑）
+            if (terrainConfig.irrigationStrength > 0) {
+                // 使用 riverThreshold 作為 fluxThreshold（過濾小支流）
+                const fluxThreshold = Math.max(3, terrainConfig.riverThreshold);
+
+                if (terrainConfig.useAdvancedIrrigation) {
+                    // 進階版：擴散 + 距離衰減 + 平滑
+                    applyHydrologyToMoistureAdvanced(
+                        terrainConfig.irrigationStrength,
+                        2,  // spreadRadius = 2（較寬的河岸綠帶）
+                        fluxThreshold
+                    );
+                } else {
+                    // 基礎版：3x3 高斯平滑
+                    applyHydrologyToMoisture(
+                        terrainConfig.irrigationStrength,
+                        fluxThreshold
+                    );
+                }
+            }
+
+            showProgress('渲染地形...', 0.95);
+
+            // Step 3: 重繪地形（生物群系會根據新的濕度改變）
+            renderTerrain();
+
+            // 隱藏進度條
+            hideProgress();
+
+            // 視覺回饋
+            generateRiversBtn.textContent = '✅ 完成！';
+            setTimeout(() => {
+                generateRiversBtn.textContent = originalText;
+            }, 1500);
+        } catch (error) {
+            console.error('河流生成失敗:', error);
+            hideProgress();
+            alert('河流生成失敗: ' + error.message);
+        } finally {
+            generateRiversBtn.disabled = false;
+        }
     });
 
     // 綁定雲層切換
