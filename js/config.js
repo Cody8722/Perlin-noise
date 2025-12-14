@@ -176,7 +176,7 @@ export const RENDER_CONSTANTS = {
 
     // Phase 18.95: 湖泊顏色（深邃靜水藍）
     LAKE_COLOR: [30, 80, 140],           // 湖泊：深沉藍 (#1E508C)
-    LAKE_ALPHA: 0.85                     // 湖泊：85% 不透明（比河流更深沉）
+    LAKE_ALPHA: 0.85,                    // 湖泊：85% 不透明（比河流更深沉）
 
     // 河流擴展尺寸（像素）
     RIVER_EXPAND_SMALL: 1,               // 小河流：單像素
