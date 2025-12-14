@@ -492,3 +492,54 @@ export function generateNewSeed() {
     terrainConfig.seed = Math.floor(Math.random() * 10000);
     return terrainConfig.seed;
 }
+
+// ========================================
+// Phase 18.99: Operation Bedrock - Centralized Config Architecture
+// ========================================
+/**
+ * WORLD_CONFIG: 集中所有世界生成相關常量
+ * 用於 Web Worker 傳遞，確保顯式狀態管理
+ */
+export const WORLD_CONFIG = {
+    // 地圖尺寸
+    map: MAP_CONFIG,
+
+    // Perlin Noise 算法
+    perlin: PERLIN_CONSTANTS,
+
+    // 地形生成
+    terrain: TERRAIN_GEN_CONSTANTS,
+
+    // 河流生成（水文系統）
+    river: RIVER_GEN_CONSTANTS,
+
+    // 進度回饋
+    progress: PROGRESS_CONSTANTS,
+
+    // 湖泊生成
+    lake: LAKE_CONSTANTS,
+
+    // 高斯平滑核
+    gaussianKernel: GAUSSIAN_KERNEL_3X3,
+};
+
+/**
+ * RENDER_CONFIG: 集中所有渲染相關常量
+ * 包含顏色方案與視覺化參數
+ */
+export const RENDER_CONFIG = {
+    // 渲染常量（河流、陰影、雲層等）
+    constants: RENDER_CONSTANTS,
+
+    // 生物群系顏色方案
+    biomeColors: BIOME_COLORS,
+};
+
+/**
+ * SYSTEM_CONFIG: 集中所有系統/效能相關常量
+ * 用於設備檢測與效能限制
+ */
+export const SYSTEM_CONFIG = {
+    // 效能限制
+    performance: PERFORMANCE_LIMITS,
+};

@@ -20,8 +20,15 @@ import {
     RIVER_GEN_CONSTANTS,
     GAUSSIAN_KERNEL_3X3,
     PROGRESS_CONSTANTS,
-    LAKE_CONSTANTS
+    LAKE_CONSTANTS,
+    WORLD_CONFIG,
+    RENDER_CONFIG,
+    SYSTEM_CONFIG
 } from './config.js';
+
+// Phase 18.99: Web Worker 實例（Operation Bedrock）
+let terrainWorker = null;
+let workerInitialized = false;
 
 // 地圖資料儲存
 export const mapData = {
@@ -297,6 +304,73 @@ export function getTerrainData(index) {
 
 /**
  * ========================================
+ * Phase 18.99: Web Worker 管理（Operation Bedrock）
+ * ========================================
+ */
+
+/**
+ * 初始化 Terrain Worker
+ * @returns {Promise<void>}
+ */
+async function initWorker() {
+    if (workerInitialized) {
+        return;  // 已初始化，跳過
+    }
+
+    return new Promise((resolve, reject) => {
+        try {
+            // 創建 Worker 實例
+            terrainWorker = new Worker('./js/terrain.worker.js', { type: 'module' });
+
+            // 設置訊息處理器（稍後在 generateRivers 中會覆蓋）
+            terrainWorker.onmessage = (e) => {
+                if (e.data.type === 'initialized') {
+                    workerInitialized = true;
+                    console.log('✅ Terrain Worker 初始化成功');
+                    resolve();
+                } else if (e.data.type === 'error') {
+                    console.error('❌ Worker 錯誤:', e.data.message);
+                    reject(new Error(e.data.message));
+                }
+            };
+
+            terrainWorker.onerror = (error) => {
+                console.error('❌ Worker 創建失敗:', error);
+                reject(error);
+            };
+
+            // 發送初始化命令
+            const configSnapshot = {
+                world: WORLD_CONFIG,
+                render: RENDER_CONFIG,
+                system: SYSTEM_CONFIG,
+                runtime: {
+                    seed: terrainConfig.seed,
+                    seaLevel: terrainConfig.seaLevel,
+                    riverThreshold: terrainConfig.riverThreshold,
+                },
+            };
+
+            terrainWorker.postMessage({
+                cmd: 'init',
+                config: configSnapshot,
+                data: {
+                    height: mapData.height,
+                    moisture: mapData.moisture,
+                    temperature: mapData.temperature,
+                    flux: mapData.flux,
+                    lakes: mapData.lakes,
+                },
+            });
+        } catch (error) {
+            console.error('❌ Worker 初始化異常:', error);
+            reject(error);
+        }
+    });
+}
+
+/**
+ * ========================================
  * PHASE 8: 水文系統 (Hydrology System)
  * ========================================
  * 使用 Monte Carlo 滴水模擬生成河流網絡
@@ -304,7 +378,7 @@ export function getTerrainData(index) {
 
 /**
  * 生成河流網絡（Monte Carlo 水滴模擬）
- * 使用物理模擬：每個水滴從隨機陸地位置出發，沿著最陡的坡度向下流動
+ * Phase 18.99: 使用 Web Worker 進行離線計算（Operation Bedrock）
  *
  * 算法原理：
  * 1. 隨機選擇陸地起點
@@ -314,6 +388,7 @@ export function getTerrainData(index) {
  *
  * Phase 12: 確保完全確定性（使用種子化 RNG）
  * Phase 18.95: 添加進度回饋支援
+ * Phase 18.99: Web Worker 架構（顯式狀態傳遞）
  *
  * @param {number} [numDroplets=10000] - 水滴數量（建議範圍：1000-200000）
  * @param {function} [onProgress=null] - 進度回調函數 (progress: 0-1)
@@ -331,17 +406,94 @@ export async function generateRivers(numDroplets = RIVER_GEN_CONSTANTS.DEFAULT_D
     }
 
     console.log(`🌊 開始生成河流網絡（${numDroplets.toLocaleString()} 個水滴）...`);
+    console.log(`   🔧 使用 Web Worker 離線計算`);
     const startTime = performance.now();
 
-    // Phase 12: 🔒 重置 RNG 到當前種子（確保確定性）
-    noise.init(terrainConfig.seed);
-    console.log(`   🎲 RNG 已重置到種子: ${terrainConfig.seed}`);
+    try {
+        // Phase 18.99: 初始化 Worker
+        await initWorker();
 
-    // 重置 flux 和湖泊資料（清除舊河流和湖泊）
+        // Phase 12: 🔒 重置 RNG 到當前種子（確保確定性）
+        noise.init(terrainConfig.seed);
+        console.log(`   🎲 RNG 已重置到種子: ${terrainConfig.seed}`);
+
+        // 使用 Promise 包裝 Worker 通訊
+        await new Promise((resolve, reject) => {
+            // 設置 Worker 訊息處理器
+            terrainWorker.onmessage = (e) => {
+                const { type, progress, data, stats, message } = e.data;
+
+                switch (type) {
+                    case 'progress':
+                        // 回報進度
+                        if (onProgress) {
+                            onProgress(progress);
+                        }
+                        break;
+
+                    case 'complete':
+                        // 複製 Worker 計算結果回主執行緒
+                        mapData.flux = new Float32Array(data.flux);
+                        mapData.lakes = new Uint8Array(data.lakes);
+
+                        // 性能統計
+                        const endTime = performance.now();
+                        const duration = endTime - startTime;
+                        const dropletsPerSecond = (numDroplets / duration * 1000).toFixed(0);
+
+                        console.log(`✅ 河流生成完成！`);
+                        console.log(`   - 成功水滴: ${stats.successfulDroplets.toLocaleString()} / ${numDroplets.toLocaleString()} (${(stats.successfulDroplets/numDroplets*100).toFixed(1)}%)`);
+                        console.log(`   - Worker 計算時間: ${stats.elapsedTime.toFixed(2)} ms`);
+                        console.log(`   - 總時間（含通訊）: ${duration.toFixed(2)} ms`);
+                        console.log(`   - 平均速度: ${dropletsPerSecond.toLocaleString()} 水滴/秒`);
+                        console.log(`   - 效能等級: ${duration < 400 ? '✅ 優秀' : duration < 1000 ? '⚠️ 可接受' : '❌ 需要優化'}`);
+
+                        resolve();
+                        break;
+
+                    case 'error':
+                        console.error(`❌ Worker 錯誤: ${message}`);
+                        reject(new Error(message));
+                        break;
+
+                    default:
+                        console.warn(`⚠️ 未知的 Worker 訊息類型: ${type}`);
+                }
+            };
+
+            terrainWorker.onerror = (error) => {
+                console.error('❌ Worker 執行錯誤:', error);
+                reject(error);
+            };
+
+            // 發送河流生成命令
+            terrainWorker.postMessage({
+                cmd: 'generateRivers',
+                numDroplets: numDroplets,
+            });
+        });
+
+    } catch (error) {
+        console.error('❌ Web Worker 河流生成失敗:', error);
+        console.log('   ⚠️ 降級到主執行緒計算...');
+
+        // 降級方案：使用原始的主執行緒計算（保留舊代碼作為 fallback）
+        await generateRiversFallback(numDroplets, onProgress);
+    }
+}
+
+/**
+ * 降級方案：主執行緒河流生成（Worker 失敗時使用）
+ * 保留 Phase 18.95 的分塊處理邏輯
+ */
+async function generateRiversFallback(numDroplets, onProgress = null) {
+    const startTime = performance.now();
+
+    // 重置 flux 和湖泊資料
     mapData.flux.fill(0);
-    mapData.lakes.fill(0);  // Phase 18.95: 清除舊湖泊
+    mapData.lakes.fill(0);
 
-    // 生成所有陸地座標列表（快取，避免重複遍歷）
+    // 生成所有陸地座標列表
     const landCoords = [];
     for (let y = 0; y < MAP_CONFIG.height; y++) {
         for (let x = 0; x < MAP_CONFIG.width; x++) {
@@ -352,55 +504,40 @@ export async function generateRivers(numDroplets = RIVER_GEN_CONSTANTS.DEFAULT_D
         }
     }
 
-    // 防禦性檢查：地圖是否有陸地
     if (landCoords.length === 0) {
         console.warn('⚠️  地圖中沒有陸地（全海洋），無法生成河流');
         return;
     }
 
-    // Phase 18.95: 分塊處理（避免 UI 凍結）+ 進度回饋
+    // 分塊處理
     let successfulDroplets = 0;
     const chunkSize = PROGRESS_CONSTANTS.CHUNK_SIZE;
 
     for (let chunkStart = 0; chunkStart < numDroplets; chunkStart += chunkSize) {
         const chunkEnd = Math.min(chunkStart + chunkSize, numDroplets);
 
-        // 處理當前塊
         for (let i = chunkStart; i < chunkEnd; i++) {
-            // Phase 12: 使用種子化 RNG（確定性）而非 Math.random()
             const randomIndex = Math.floor(noise.random() * landCoords.length);
             const startPos = landCoords[randomIndex];
-
-            // 模擬水滴路徑
             const pathLength = simulateDroplet(startPos.x, startPos.y);
-
             if (pathLength > 0) {
                 successfulDroplets++;
             }
         }
 
-        // 更新進度
         const progress = chunkEnd / numDroplets;
         if (onProgress) {
             onProgress(progress);
         }
 
-        // 讓出主執行緒（避免 UI 凍結）
         if (chunkEnd < numDroplets) {
             await new Promise(resolve => setTimeout(resolve, 0));
         }
     }
 
-    // 性能統計
     const endTime = performance.now();
     const duration = endTime - startTime;
-    const dropletsPerSecond = (numDroplets / duration * 1000).toFixed(0);
-
-    console.log(`✅ 河流生成完成！`);
-    console.log(`   - 成功水滴: ${successfulDroplets.toLocaleString()} / ${numDroplets.toLocaleString()} (${(successfulDroplets/numDroplets*100).toFixed(1)}%)`);
-    console.log(`   - 執行時間: ${duration.toFixed(2)} ms`);
-    console.log(`   - 平均速度: ${dropletsPerSecond.toLocaleString()} 水滴/秒`);
-    console.log(`   - 效能等級: ${duration < 400 ? '✅ 優秀' : duration < 1000 ? '⚠️ 可接受' : '❌ 需要優化'}`);
+    console.log(`✅ 降級方案完成 - 時間: ${duration.toFixed(2)} ms`);
 }
 
 /**
