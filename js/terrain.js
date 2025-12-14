@@ -624,21 +624,56 @@ function simulateDroplet(startX, startY) {
             }
         }
 
-        // Phase 18: 水力侵蝕與沉積邏輯
+        // Phase 18.99 Part 2: 水力連續性（Hydraulic Continuity - Fill and Spill）
         if (nextX === x && nextY === y) {
             // 局部窪地（Local Minima）：無更低的鄰居
-            // 沉積（Deposition）：填充坑洞，使水能溢出
-            mapData.height[currentIndex] += RIVER_GEN_CONSTANTS.DEPOSITION_RATE * waterVolume;
+            // Phase 1: 沉積（Deposition）- 填充坑洞
+            const depositionAmount = RIVER_GEN_CONSTANTS.DEPOSITION_RATE * waterVolume;
+            mapData.height[currentIndex] += depositionAmount;
 
             // Phase 18.95: 標記為湖泊（靜態水體）
-            // 如果窪地深度足夠且遠離海洋，標記為湖泊
-            if (currentHeight > terrainConfig.seaLevel + LAKE_CONSTANTS.MIN_LAKE_DEPTH) {
-                mapData.lakes[currentIndex] = 1;  // 標記為湖泊
+            const updatedHeight = mapData.height[currentIndex];
+            if (updatedHeight > terrainConfig.seaLevel + LAKE_CONSTANTS.MIN_LAKE_DEPTH) {
+                mapData.lakes[currentIndex] = 1;
             }
 
-            // 水滴在窪地停止（已填充，下一個水滴會繼續前進）
-            break;
-        } else {
+            // Phase 2: 溢出檢查（Overflow Check）
+            // 填充後重新尋找最低鄰居（即使原本是上坡）
+            let overflowX = x;
+            let overflowY = y;
+            let lowestNeighborHeight = updatedHeight;
+
+            for (const { dx, dy } of neighbors) {
+                const nx = x + dx;
+                const ny = y + dy;
+
+                if (nx < 0 || nx >= MAP_CONFIG.width || ny < 0 || ny >= MAP_CONFIG.height) continue;
+
+                const neighborHeight = getHeight(nx, ny);
+
+                // 尋找最低的鄰居（包含原本上坡的）
+                if (neighborHeight < lowestNeighborHeight) {
+                    lowestNeighborHeight = neighborHeight;
+                    overflowX = nx;
+                    overflowY = ny;
+                }
+            }
+
+            // Phase 3: 溢出決策（Overflow Decision）
+            if (updatedHeight >= lowestNeighborHeight && (overflowX !== x || overflowY !== y)) {
+                // 湖泊已填滿，水滴可溢出到最低鄰居
+                // 繼續流動，連接河流網絡（Flux Continuity）
+                nextX = overflowX;
+                nextY = overflowY;
+                // 不 break，繼續到移動邏輯
+            } else {
+                // 窪地仍太深，水滴停止（但坑洞已變淺，下一個水滴會繼續填充）
+                break;
+            }
+        }
+
+        // 有下坡路徑或溢出成功：計算坡度並決定是否侵蝕
+        if (nextX !== x || nextY !== y) {
             // 有下坡路徑：計算坡度並決定是否侵蝕
             const slope = currentHeight - lowestHeight;
 
