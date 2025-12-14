@@ -26,9 +26,217 @@ import {
     SYSTEM_CONFIG
 } from './config.js';
 
-// Phase 18.99: Web Worker 實例（Operation Bedrock）
-let terrainWorker = null;
-let workerInitialized = false;
+// ========================================
+// Phase 18.99 Part 4: FSM Controller (Audit Report - Option B Step 2)
+// ========================================
+/**
+ * Finite State Machine for Worker Management
+ *
+ * States:
+ * - IDLE: No worker exists
+ * - INITIALIZING: Worker being created
+ * - READY: Worker ready for commands
+ * - GENERATING: Worker processing rivers
+ * - ERROR: Worker failed, needs reset
+ *
+ * Prevents race conditions and ensures proper lifecycle management
+ */
+class TerrainWorkerController {
+    constructor() {
+        this.state = 'IDLE';
+        this.worker = null;
+        this.initPromise = null;  // Track ongoing initialization
+    }
+
+    /**
+     * Initialize Worker (IDLE -> INITIALIZING -> READY)
+     * @returns {Promise<void>}
+     */
+    async init() {
+        // Prevent concurrent initialization
+        if (this.state === 'INITIALIZING') {
+            console.log('   ⏳ Worker 初始化進行中，等待完成...');
+            return this.initPromise;
+        }
+
+        // Already ready
+        if (this.state === 'READY' || this.state === 'GENERATING') {
+            return;
+        }
+
+        // Reset from ERROR state
+        if (this.state === 'ERROR') {
+            this.reset();
+        }
+
+        // Transition: IDLE -> INITIALIZING
+        this.state = 'INITIALIZING';
+        console.log('   🔧 FSM: IDLE → INITIALIZING');
+
+        this.initPromise = new Promise((resolve, reject) => {
+            try {
+                // Create Worker instance
+                this.worker = new Worker('./js/terrain.worker.js', { type: 'module' });
+
+                // Setup message handler for initialization
+                this.worker.onmessage = (e) => {
+                    if (e.data.type === 'initialized') {
+                        // Transition: INITIALIZING -> READY
+                        this.state = 'READY';
+                        console.log('✅ Terrain Worker 初始化成功');
+                        console.log('   🔧 FSM: INITIALIZING → READY');
+                        resolve();
+                    } else if (e.data.type === 'error') {
+                        // Transition: INITIALIZING -> ERROR
+                        this.state = 'ERROR';
+                        console.error('❌ Worker 初始化錯誤:', e.data.message);
+                        console.log('   🔧 FSM: INITIALIZING → ERROR');
+                        reject(new Error(e.data.message));
+                    }
+                };
+
+                this.worker.onerror = (error) => {
+                    // Transition: INITIALIZING -> ERROR
+                    this.state = 'ERROR';
+                    console.error('❌ Worker 創建失敗:', error);
+                    console.log('   🔧 FSM: INITIALIZING → ERROR');
+                    reject(error);
+                };
+
+                // Send init command
+                const configSnapshot = {
+                    world: WORLD_CONFIG,
+                    render: RENDER_CONFIG,
+                    system: SYSTEM_CONFIG,
+                    runtime: {
+                        seed: terrainConfig.seed,
+                        seaLevel: terrainConfig.seaLevel,
+                        riverThreshold: terrainConfig.riverThreshold,
+                    },
+                };
+
+                this.worker.postMessage({
+                    cmd: 'init',
+                    config: configSnapshot,
+                    data: {
+                        height: mapData.height,
+                        moisture: mapData.moisture,
+                        temperature: mapData.temperature,
+                        flux: mapData.flux,
+                        lakes: mapData.lakes,
+                    },
+                });
+            } catch (error) {
+                // Transition: INITIALIZING -> ERROR
+                this.state = 'ERROR';
+                console.error('❌ Worker 初始化異常:', error);
+                console.log('   🔧 FSM: INITIALIZING → ERROR');
+                reject(error);
+            }
+        });
+
+        return this.initPromise;
+    }
+
+    /**
+     * Generate Rivers (READY -> GENERATING -> READY)
+     * @param {number} numDroplets - Number of droplets
+     * @param {function} onProgress - Progress callback
+     * @returns {Promise<object>} Generation stats
+     */
+    async generateRivers(numDroplets, onProgress = null) {
+        // Validate state
+        if (this.state === 'GENERATING') {
+            throw new Error('河流生成進行中，請稍候');
+        }
+
+        if (this.state !== 'READY') {
+            throw new Error(`Invalid state for generation: ${this.state}`);
+        }
+
+        // Transition: READY -> GENERATING
+        this.state = 'GENERATING';
+        console.log('   🔧 FSM: READY → GENERATING');
+
+        return new Promise((resolve, reject) => {
+            // Setup message handler for generation
+            this.worker.onmessage = (e) => {
+                const { type, progress, data, stats, message } = e.data;
+
+                switch (type) {
+                    case 'progress':
+                        if (onProgress) {
+                            onProgress(progress);
+                        }
+                        break;
+
+                    case 'complete':
+                        // Transition: GENERATING -> READY
+                        this.state = 'READY';
+                        console.log('   🔧 FSM: GENERATING → READY');
+
+                        // Copy results to main thread
+                        mapData.flux = new Float32Array(data.flux);
+                        mapData.lakes = new Uint8Array(data.lakes);
+
+                        resolve(stats);
+                        break;
+
+                    case 'error':
+                        // Transition: GENERATING -> ERROR
+                        this.state = 'ERROR';
+                        console.error(`❌ Worker 生成錯誤: ${message}`);
+                        console.log('   🔧 FSM: GENERATING → ERROR');
+                        reject(new Error(message));
+                        break;
+
+                    default:
+                        console.warn(`⚠️ 未知的 Worker 訊息類型: ${type}`);
+                }
+            };
+
+            this.worker.onerror = (error) => {
+                // Transition: GENERATING -> ERROR
+                this.state = 'ERROR';
+                console.error('❌ Worker 執行錯誤:', error);
+                console.log('   🔧 FSM: GENERATING → ERROR');
+                reject(error);
+            };
+
+            // Send generation command
+            this.worker.postMessage({
+                cmd: 'generateRivers',
+                numDroplets: numDroplets,
+            });
+        });
+    }
+
+    /**
+     * Reset controller (ERROR -> IDLE or ANY -> IDLE)
+     */
+    reset() {
+        console.log(`   🔄 FSM: ${this.state} → IDLE (Reset)`);
+
+        if (this.worker) {
+            this.worker.terminate();
+            this.worker = null;
+        }
+
+        this.state = 'IDLE';
+        this.initPromise = null;
+    }
+
+    /**
+     * Get current state
+     * @returns {string} Current FSM state
+     */
+    getState() {
+        return this.state;
+    }
+}
+
+// Create singleton controller instance
+const workerController = new TerrainWorkerController();
 
 // 地圖資料儲存
 export const mapData = {
@@ -304,70 +512,9 @@ export function getTerrainData(index) {
 
 /**
  * ========================================
- * Phase 18.99: Web Worker 管理（Operation Bedrock）
+ * Phase 18.99 Part 4: Public API (使用 FSM Controller)
  * ========================================
  */
-
-/**
- * 初始化 Terrain Worker
- * @returns {Promise<void>}
- */
-async function initWorker() {
-    if (workerInitialized) {
-        return;  // 已初始化，跳過
-    }
-
-    return new Promise((resolve, reject) => {
-        try {
-            // 創建 Worker 實例
-            terrainWorker = new Worker('./js/terrain.worker.js', { type: 'module' });
-
-            // 設置訊息處理器（稍後在 generateRivers 中會覆蓋）
-            terrainWorker.onmessage = (e) => {
-                if (e.data.type === 'initialized') {
-                    workerInitialized = true;
-                    console.log('✅ Terrain Worker 初始化成功');
-                    resolve();
-                } else if (e.data.type === 'error') {
-                    console.error('❌ Worker 錯誤:', e.data.message);
-                    reject(new Error(e.data.message));
-                }
-            };
-
-            terrainWorker.onerror = (error) => {
-                console.error('❌ Worker 創建失敗:', error);
-                reject(error);
-            };
-
-            // 發送初始化命令
-            const configSnapshot = {
-                world: WORLD_CONFIG,
-                render: RENDER_CONFIG,
-                system: SYSTEM_CONFIG,
-                runtime: {
-                    seed: terrainConfig.seed,
-                    seaLevel: terrainConfig.seaLevel,
-                    riverThreshold: terrainConfig.riverThreshold,
-                },
-            };
-
-            terrainWorker.postMessage({
-                cmd: 'init',
-                config: configSnapshot,
-                data: {
-                    height: mapData.height,
-                    moisture: mapData.moisture,
-                    temperature: mapData.temperature,
-                    flux: mapData.flux,
-                    lakes: mapData.lakes,
-                },
-            });
-        } catch (error) {
-            console.error('❌ Worker 初始化異常:', error);
-            reject(error);
-        }
-    });
-}
 
 /**
  * ========================================
@@ -378,7 +525,7 @@ async function initWorker() {
 
 /**
  * 生成河流網絡（Monte Carlo 水滴模擬）
- * Phase 18.99: 使用 Web Worker 進行離線計算（Operation Bedrock）
+ * Phase 18.99 Part 4: 使用 FSM Controller 管理 Worker（Audit Report - Option B Step 2）
  *
  * 算法原理：
  * 1. 隨機選擇陸地起點
@@ -389,11 +536,13 @@ async function initWorker() {
  * Phase 12: 確保完全確定性（使用種子化 RNG）
  * Phase 18.95: 添加進度回饋支援
  * Phase 18.99: Web Worker 架構（顯式狀態傳遞）
+ * Phase 18.99 Part 4: FSM 狀態管理（防止競態條件）
  *
  * @param {number} [numDroplets=10000] - 水滴數量（建議範圍：1000-200000）
  * @param {function} [onProgress=null] - 進度回調函數 (progress: 0-1)
  * @returns {Promise<void>} 完成時解析
  * @throws {RangeError} 如果 numDroplets < 0
+ * @throws {Error} 如果正在生成中（防止並發）
  */
 export async function generateRivers(numDroplets = RIVER_GEN_CONSTANTS.DEFAULT_DROPLET_COUNT, onProgress = null) {
     // 參數驗證
@@ -406,78 +555,49 @@ export async function generateRivers(numDroplets = RIVER_GEN_CONSTANTS.DEFAULT_D
     }
 
     console.log(`🌊 開始生成河流網絡（${numDroplets.toLocaleString()} 個水滴）...`);
-    console.log(`   🔧 使用 Web Worker 離線計算`);
+    console.log(`   🔧 使用 FSM Controller 管理 Worker`);
+    console.log(`   📊 當前狀態: ${workerController.getState()}`);
     const startTime = performance.now();
 
     try {
-        // Phase 18.99: 初始化 Worker
-        await initWorker();
+        // Phase 18.99 Part 4: 使用 FSM Controller 初始化
+        await workerController.init();
 
         // Phase 12: 🔒 重置 RNG 到當前種子（確保確定性）
         noise.init(terrainConfig.seed);
         console.log(`   🎲 RNG 已重置到種子: ${terrainConfig.seed}`);
 
-        // 使用 Promise 包裝 Worker 通訊
-        await new Promise((resolve, reject) => {
-            // 設置 Worker 訊息處理器
-            terrainWorker.onmessage = (e) => {
-                const { type, progress, data, stats, message } = e.data;
+        // Phase 18.99 Part 4: 使用 FSM Controller 生成河流
+        const stats = await workerController.generateRivers(numDroplets, onProgress);
 
-                switch (type) {
-                    case 'progress':
-                        // 回報進度
-                        if (onProgress) {
-                            onProgress(progress);
-                        }
-                        break;
+        // 性能統計
+        const endTime = performance.now();
+        const duration = endTime - startTime;
+        const dropletsPerSecond = (numDroplets / duration * 1000).toFixed(0);
 
-                    case 'complete':
-                        // 複製 Worker 計算結果回主執行緒
-                        mapData.flux = new Float32Array(data.flux);
-                        mapData.lakes = new Uint8Array(data.lakes);
-
-                        // 性能統計
-                        const endTime = performance.now();
-                        const duration = endTime - startTime;
-                        const dropletsPerSecond = (numDroplets / duration * 1000).toFixed(0);
-
-                        console.log(`✅ 河流生成完成！`);
-                        console.log(`   - 成功水滴: ${stats.successfulDroplets.toLocaleString()} / ${numDroplets.toLocaleString()} (${(stats.successfulDroplets/numDroplets*100).toFixed(1)}%)`);
-                        console.log(`   - Worker 計算時間: ${stats.elapsedTime.toFixed(2)} ms`);
-                        console.log(`   - 總時間（含通訊）: ${duration.toFixed(2)} ms`);
-                        console.log(`   - 平均速度: ${dropletsPerSecond.toLocaleString()} 水滴/秒`);
-                        console.log(`   - 效能等級: ${duration < 400 ? '✅ 優秀' : duration < 1000 ? '⚠️ 可接受' : '❌ 需要優化'}`);
-
-                        resolve();
-                        break;
-
-                    case 'error':
-                        console.error(`❌ Worker 錯誤: ${message}`);
-                        reject(new Error(message));
-                        break;
-
-                    default:
-                        console.warn(`⚠️ 未知的 Worker 訊息類型: ${type}`);
-                }
-            };
-
-            terrainWorker.onerror = (error) => {
-                console.error('❌ Worker 執行錯誤:', error);
-                reject(error);
-            };
-
-            // 發送河流生成命令
-            terrainWorker.postMessage({
-                cmd: 'generateRivers',
-                numDroplets: numDroplets,
-            });
-        });
+        console.log(`✅ 河流生成完成！`);
+        console.log(`   - 成功水滴: ${stats.successfulDroplets.toLocaleString()} / ${numDroplets.toLocaleString()} (${(stats.successfulDroplets/numDroplets*100).toFixed(1)}%)`);
+        console.log(`   - Worker 計算時間: ${stats.elapsedTime.toFixed(2)} ms`);
+        console.log(`   - 總時間（含通訊）: ${duration.toFixed(2)} ms`);
+        console.log(`   - 平均速度: ${dropletsPerSecond.toLocaleString()} 水滴/秒`);
+        console.log(`   - 效能等級: ${duration < 400 ? '✅ 優秀' : duration < 1000 ? '⚠️ 可接受' : '❌ 需要優化'}`);
+        console.log(`   📊 最終狀態: ${workerController.getState()}`);
 
     } catch (error) {
         console.error('❌ Web Worker 河流生成失敗:', error);
-        console.log('   ⚠️ 降級到主執行緒計算...');
+        console.log(`   📊 錯誤狀態: ${workerController.getState()}`);
 
-        // 降級方案：使用原始的主執行緒計算（保留舊代碼作為 fallback）
+        // Fix C1/C2: 檢查錯誤類型，決定是否降級
+        if (error.message === '河流生成進行中，請稍候') {
+            // 並發錯誤：不降級，直接拋出
+            throw error;
+        }
+
+        console.log('   ⚠️ 降級到主執行緒計算...');
+        console.log('   🔄 重置 FSM Controller...');
+        workerController.reset();
+
+        // 降級方案：使用原始的主執行緒計算
         await generateRiversFallback(numDroplets, onProgress);
     }
 }
