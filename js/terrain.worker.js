@@ -8,6 +8,31 @@
  * 1. 顯式狀態傳遞（不依賴全域 config.js）
  * 2. 錯誤邊界（try-catch 包裹所有計算）
  * 3. 進度回報（定期向主執行緒報告進度）
+ *
+ * ========================================
+ * Phase 18.99 Part 3: Critical Safety Fixes (Code Audit - Option B Step 1)
+ * ========================================
+ * 基於深度代碼審查報告，實施以下關鍵修復：
+ *
+ * Fix C4 - 無窮迴圈防護（CRITICAL）:
+ *   - 添加 visited Set：防止水滴重複訪問相同位置
+ *   - 添加 closedSet：防止溢出邏輯在兩個窪地間振盪
+ *   - 使用索引作為 key（y * width + x）提升效能
+ *
+ * Fix L2 - 湖泊標記邏輯修正（LOGIC）:
+ *   - 溢出成功時「不」標記湖泊（水仍在流動）
+ *   - 只在真正停止時標記湖泊（窪地太深無法溢出）
+ *   - 確保視覺正確性（溢出點不顯示為湖泊）
+ *
+ * Fix D1 - 資料完整性防護（DATA INTEGRITY）:
+ *   - 添加 Number.isFinite() 檢查於所有高度修改
+ *   - 檢測並處理 NaN/Infinity（記錄警告並中止水滴）
+ *   - 防止 NaN 傳播到整個地圖
+ *
+ * Fix O1 - 效能優化（PERFORMANCE）:
+ *   - 使用 Transferable Objects 於 postMessage
+ *   - 零複製轉移 Float32Array/Uint8Array（~300KB → <1ms）
+ *   - 大幅減少主執行緒與 Worker 間通訊開銷
  */
 
 // 導入 Perlin Noise 模組（Worker 環境需要 importScripts）
@@ -141,8 +166,9 @@ function handleGenerateRivers(numDroplets) {
 
     const elapsedTime = Date.now() - startTime;
 
-    // 回報完成
-    self.postMessage({
+    // Fix O1: Performance - 使用 Transferable Objects（零複製轉移）
+    // 準備要轉移的資料
+    const transferData = {
         type: 'complete',
         data: {
             flux: mapData.flux,
@@ -153,12 +179,21 @@ function handleGenerateRivers(numDroplets) {
             successfulDroplets: successfulDroplets,
             elapsedTime: elapsedTime,
         },
-    });
+    };
+
+    // 使用 Transferable Objects 語法（零複製，轉移所有權）
+    // 注意：轉移後 Worker 內的 mapData.flux 和 mapData.lakes 將變為空陣列
+    // 這沒問題，因為下次生成會重新創建
+    self.postMessage(transferData, [
+        mapData.flux.buffer,
+        mapData.lakes.buffer,
+    ]);
 }
 
 /**
  * 模擬單個水滴的流動路徑（Monte Carlo 方法）
  * Phase 18: 加入水力侵蝕機制（Hydraulic Erosion）
+ * Phase 18.99 Part 3: Critical Safety Fixes (Audit Report - Option B)
  *
  * @param {number} startX - 起始 X 座標
  * @param {number} startY - 起始 Y 座標
@@ -176,9 +211,31 @@ function simulateDroplet(startX, startY, config) {
     let waterVolume = riverConst.INITIAL_WATER_VOLUME;
     let pathLength = 0;
 
+    // Fix C4: 防止無窮迴圈 - 訪問記錄
+    const visited = new Set();
+    const makeKey = (x, y) => y * width + x;  // 使用索引作為 key（效能優化）
+
+    // Fix C4: 防止溢出振盪 - 已嘗試溢出的位置
+    const closedSet = new Set();
+
     for (let iter = 0; iter < riverConst.MAX_DROPLET_ITERATIONS; iter++) {
         const currentIndex = y * width + x;
+
+        // Fix C4: 循環檢測（Critical）
+        const key = makeKey(x, y);
+        if (visited.has(key)) {
+            // 檢測到循環，停止模擬
+            break;
+        }
+        visited.add(key);
+
         const currentHeight = mapData.height[currentIndex];
+
+        // Fix D1: Data Integrity - 檢查 NaN/Infinity
+        if (!Number.isFinite(currentHeight)) {
+            console.warn(`Worker: NaN/Infinity detected at (${x}, ${y}), aborting droplet`);
+            break;
+        }
 
         // Phase 18: 蒸發（Evaporation）- 水滴逐步損失水量
         waterVolume -= riverConst.EVAPORATION_RATE;
@@ -226,15 +283,30 @@ function simulateDroplet(startX, startY, config) {
         // Phase 18.99 Part 2: 水力連續性（Hydraulic Continuity - Fill and Spill）
         if (nextX === x && nextY === y) {
             // 局部窪地（Local Minima）：無更低的鄰居
+
+            // Fix C4: 防止溢出振盪
+            if (closedSet.has(key)) {
+                // 此位置已嘗試溢出但失敗，避免無限循環
+                // 標記為湖泊並停止
+                if (currentHeight > seaLevel + lakeConst.MIN_LAKE_DEPTH) {
+                    mapData.lakes[currentIndex] = 1;
+                }
+                break;
+            }
+            closedSet.add(key);
+
             // Phase 1: 沉積（Deposition）- 填充坑洞
             const depositionAmount = riverConst.DEPOSITION_RATE * waterVolume;
-            mapData.height[currentIndex] += depositionAmount;
+            const newHeight = mapData.height[currentIndex] + depositionAmount;
 
-            // Phase 18.95: 標記為湖泊（靜態水體）
-            const updatedHeight = mapData.height[currentIndex];
-            if (updatedHeight > seaLevel + lakeConst.MIN_LAKE_DEPTH) {
-                mapData.lakes[currentIndex] = 1;
+            // Fix D1: Data Integrity - 驗證計算結果
+            if (!Number.isFinite(newHeight)) {
+                console.warn(`Worker: Invalid height after deposition at (${x}, ${y}), skipping`);
+                break;
             }
+
+            mapData.height[currentIndex] = newHeight;
+            const updatedHeight = newHeight;
 
             // Phase 2: 溢出檢查（Overflow Check）
             // 填充後重新尋找最低鄰居（即使原本是上坡）
@@ -261,13 +333,17 @@ function simulateDroplet(startX, startY, config) {
 
             // Phase 3: 溢出決策（Overflow Decision）
             if (updatedHeight >= lowestNeighborHeight && (overflowX !== x || overflowY !== y)) {
-                // 湖泊已填滿，水滴可溢出到最低鄰居
+                // Fix L2: 溢出成功 - 不標記湖泊（水仍在流動）
                 // 繼續流動，連接河流網絡（Flux Continuity）
                 nextX = overflowX;
                 nextY = overflowY;
                 // 不 break，繼續主迴圈以建立河流連接
             } else {
+                // Fix L2: 真正的窪地 - 標記為湖泊並停止
                 // 窪地仍太深，水滴停止（但坑洞已變淺，下一個水滴會繼續填充）
+                if (updatedHeight > seaLevel + lakeConst.MIN_LAKE_DEPTH) {
+                    mapData.lakes[currentIndex] = 1;
+                }
                 break;
             }
         }
@@ -278,7 +354,18 @@ function simulateDroplet(startX, startY, config) {
         // Phase 18: 侵蝕（Erosion）- 只在坡度足夠時發生
         if (slope > riverConst.MIN_SLOPE_FOR_EROSION) {
             const erosionAmount = riverConst.EROSION_RATE * waterVolume * slope;
-            mapData.height[currentIndex] -= erosionAmount;
+            const newHeight = mapData.height[currentIndex] - erosionAmount;
+
+            // Fix D1: Data Integrity - 驗證侵蝕結果
+            if (Number.isFinite(newHeight) && newHeight >= seaLevel) {
+                mapData.height[currentIndex] = newHeight;
+            } else if (!Number.isFinite(newHeight)) {
+                console.warn(`Worker: Invalid height after erosion at (${x}, ${y}), reverting`);
+                // 保持原高度，不侵蝕
+            } else {
+                // 不侵蝕到海平面以下
+                mapData.height[currentIndex] = seaLevel;
+            }
         }
 
         // 移動到下一個位置
