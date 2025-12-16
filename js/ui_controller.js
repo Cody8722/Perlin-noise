@@ -243,13 +243,130 @@ function hideGeneratingIndicator() {
 
 /**
  * ========================================
+ * Phase 20: 無限地圖拖動系統
+ * ========================================
+ * 滑鼠拖動 Canvas 以平移無限世界
+ *
+ * @param {Object} renderCallback - 渲染回調函數 { renderAll }
+ */
+export function setupMapDragging(renderCallback) {
+    console.log('🗺️  設置無限地圖拖動系統...');
+
+    const canvas = document.getElementById('terrainLayer');
+    if (!canvas) {
+        console.warn('   ⚠️  找不到 terrainLayer Canvas，拖動功能未啟用');
+        return;
+    }
+
+    let isDragging = false;
+    let lastX = 0;
+    let lastY = 0;
+
+    // 防抖延遲（拖動停止後延遲生成，避免拖動時頻繁重新生成）
+    const DRAG_DEBOUNCE_DELAY = 500;  // 0.5 秒
+
+    /**
+     * 拖動結束後的防抖生成（完整地形 + 河流）
+     */
+    const debouncedDragGeneration = debounce(async () => {
+        console.log('🌍 拖動完成：重新生成地形與河流...');
+        showGeneratingIndicator('拖動地圖 - 生成中...');
+
+        try {
+            // 動態導入（避免循環依賴）
+            const { generateTerrain, generateRivers } = await import('./terrain.js');
+            const { terrainConfig } = await import('./config.js');
+
+            // 1. 生成地形（使用新的 offsetX/offsetY）
+            generateTerrain();
+
+            // 2. 生成河流
+            const riverDensity = terrainConfig.riverDensity || 10000;
+            await generateRivers(riverDensity);
+
+            // 3. 渲染
+            if (renderCallback && renderCallback.renderAll) {
+                renderCallback.renderAll();
+            }
+
+            hideGeneratingIndicator();
+            console.log('✅ 拖動生成完成');
+        } catch (error) {
+            hideGeneratingIndicator();
+            console.error('❌ 拖動生成失敗:', error);
+        }
+    }, DRAG_DEBOUNCE_DELAY);
+
+    // 滑鼠按下 - 開始拖動
+    canvas.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        lastX = e.clientX;
+        lastY = e.clientY;
+        canvas.style.cursor = 'grabbing';
+    });
+
+    // 滑鼠移動 - 更新偏移
+    canvas.addEventListener('mousemove', async (e) => {
+        if (!isDragging) return;
+
+        // 計算滑鼠移動距離（像素）
+        const deltaX = e.clientX - lastX;
+        const deltaY = e.clientY - lastY;
+
+        // 更新上次位置
+        lastX = e.clientX;
+        lastY = e.clientY;
+
+        // 動態導入 terrainConfig
+        const { terrainConfig } = await import('./config.js');
+
+        // 更新世界座標偏移（注意：滑鼠向右拖 = 地圖向右移 = 世界向左偏移）
+        // 所以是減法，不是加法
+        terrainConfig.offsetX -= deltaX;
+        terrainConfig.offsetY -= deltaY;
+
+        // 即時視覺回饋（顯示當前偏移）
+        console.log(`🗺️  拖動中... offsetX: ${terrainConfig.offsetX}, offsetY: ${terrainConfig.offsetY}`);
+    });
+
+    // 滑鼠放開 - 停止拖動並觸發生成
+    canvas.addEventListener('mouseup', () => {
+        if (isDragging) {
+            isDragging = false;
+            canvas.style.cursor = 'grab';
+
+            // 觸發防抖生成（拖動停止後才生成，避免拖動中卡頓）
+            debouncedDragGeneration();
+        }
+    });
+
+    // 滑鼠離開 Canvas - 停止拖動
+    canvas.addEventListener('mouseleave', () => {
+        if (isDragging) {
+            isDragging = false;
+            canvas.style.cursor = 'grab';
+
+            // 同樣觸發生成
+            debouncedDragGeneration();
+        }
+    });
+
+    // 設定預設游標為 'grab'
+    canvas.style.cursor = 'grab';
+
+    console.log('✅ 無限地圖拖動已啟用');
+    console.log('   🖱️  滑鼠拖動 Canvas 即可探索無限世界');
+}
+
+/**
+ * ========================================
  * 公開 API：初始化 UI 控制器
  * ========================================
  * @param {Object} renderCallback - 渲染回調函數 { renderAll }
  */
 export function initUI(renderCallback) {
     console.log('╔════════════════════════════════════════════════════════╗');
-    console.log('║  🎨 Phase 19.0: UI Modernization                      ║');
+    console.log('║  🎨 Phase 19.0 + 20: UI Modernization + Infinite Map ║');
     console.log('╚════════════════════════════════════════════════════════╝');
 
     // 1. 禁用雲層
@@ -258,8 +375,12 @@ export function initUI(renderCallback) {
     // 2. 設置自動生成
     setupAutoGeneration(renderCallback);
 
+    // 3. Phase 20: 設置無限地圖拖動
+    setupMapDragging(renderCallback);
+
     console.log('✅ UI 控制器初始化完成');
     console.log('   💡 現在可以直接拖動滑桿，系統會自動重新生成！');
+    console.log('   🗺️  拖動地圖探索無限世界！');
 }
 
 // 也可以暴露到 window（方便測試）
@@ -268,6 +389,7 @@ if (typeof window !== 'undefined') {
         debounce,
         disableClouds,
         setupAutoGeneration,
+        setupMapDragging,  // Phase 20
         initUI
     };
 }

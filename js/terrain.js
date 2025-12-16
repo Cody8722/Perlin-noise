@@ -266,25 +266,33 @@ export function generateTerrain() {
     // 設定噪聲種子
     noise.init(terrainConfig.seed);
 
+    // Phase 20: 取得相機偏移（Infinite Map）
+    const offsetX = terrainConfig.offsetX || 0;
+    const offsetY = terrainConfig.offsetY || 0;
+
     // 遍歷每個像素
     for (let y = 0; y < MAP_CONFIG.height; y++) {
         for (let x = 0; x < MAP_CONFIG.width; x++) {
             const index = y * MAP_CONFIG.width + x;
 
-            // 生成高度值（使用 FBM）
+            // Phase 20: 應用世界座標偏移（實現無限地圖）
+            const worldX = x + offsetX;
+            const worldY = y + offsetY;
+
+            // 生成高度值（使用 FBM + 世界座標）
             const height = noise.fbm(
-                x,
-                y,
+                worldX,
+                worldY,
                 terrainConfig.octaves,
                 terrainConfig.scale,
                 0  // 高度層無偏移
             );
             mapData.height[index] = height;
 
-            // 生成濕度值（使用較少的八度數，較大的縮放）
+            // 生成濕度值（使用較少的八度數，較大的縮放 + 世界座標）
             const moisture = noise.fbm(
-                x,
-                y,
+                worldX,
+                worldY,
                 TERRAIN_GEN_CONSTANTS.MOISTURE_OCTAVES,  // 較少細節（3 層）
                 terrainConfig.scale * TERRAIN_GEN_CONSTANTS.MOISTURE_SCALE_MULTIPLIER,
                 TERRAIN_GEN_CONSTANTS.MOISTURE_SEED_OFFSET  // 獨立種子空間
@@ -294,8 +302,8 @@ export function generateTerrain() {
             mapData.baseMoisture[index] = moisture;
             mapData.moisture[index] = moisture;
 
-            // 生成溫度值（緯度 + 噪聲 + 海拔影響）
-            mapData.temperature[index] = generateTemperatureAt(x, y, height);
+            // 生成溫度值（緯度 + 噪聲 + 海拔影響 + 世界座標）
+            mapData.temperature[index] = generateTemperatureAt(worldX, worldY, height);
         }
     }
 
@@ -315,20 +323,26 @@ export function generateTerrain() {
  * - 海拔效應：對流層溫度遞減率（Environmental Lapse Rate）
  * - 噪聲擾動：海洋/陸地分佈、洋流、山脈等局部效應
  *
- * @param {number} x - X 座標（0 到 MAP_CONFIG.width-1）
- * @param {number} y - Y 座標（0 到 MAP_CONFIG.height-1）
+ * Phase 20: x, y 現在是世界座標（worldX, worldY），用於噪聲生成
+ *
+ * @param {number} x - 世界 X 座標（用於噪聲，無限範圍）
+ * @param {number} y - 世界 Y 座標（用於噪聲，無限範圍）
  * @param {number} elevation - 海拔高度 (0-1，0=海溝，1=高山）
  * @returns {number} 溫度值（0-1，0=極冷，1=極熱）
  */
 function generateTemperatureAt(x, y, elevation) {
-    // 1. 計算緯度因子（0 = 北極，0.5 = 赤道，1 = 南極）
-    const latitude = y / MAP_CONFIG.height;
+    // Phase 20: 緯度使用世界座標模運算，創造無限重複的氣候帶
+    // 使用大週期避免不自然的重複（例如 10000 像素一個完整週期）
+    const LATITUDE_PERIOD = 10000;
+    const normalizedY = (y % LATITUDE_PERIOD + LATITUDE_PERIOD) % LATITUDE_PERIOD;
+    const latitude = normalizedY / LATITUDE_PERIOD;
 
     // 使用絕對值創建對稱的溫度帶（赤道最熱）
     // Math.abs(latitude - 0.5) 在赤道處為 0，兩極處為 0.5
     const latitudeFactor = 1 - Math.abs(latitude - 0.5) * TERRAIN_GEN_CONSTANTS.TEMPERATURE_LATITUDE_FACTOR;  // 0-1，赤道=1，極地=0
 
     // 2. 添加 Perlin 噪聲變化（使氣候帶不完全規則）
+    // Phase 20: 噪聲使用世界座標，實現無縫無限地圖
     const temperatureNoise = noise.fbm(
         x,
         y,
