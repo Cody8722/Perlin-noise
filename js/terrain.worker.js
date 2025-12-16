@@ -35,8 +35,8 @@
  *   - 大幅減少主執行緒與 Worker 間通訊開銷
  */
 
-// 導入 Perlin Noise 模組（Worker 環境需要 importScripts）
-importScripts('./noise.js');
+// 導入 Perlin Noise 模組（ES6 Module Worker 使用 import）
+import noise from './noise.js';
 
 // Worker 本地狀態
 let workerConfig = null;

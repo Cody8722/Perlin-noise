@@ -180,5 +180,12 @@
     <script type="module" src="js/state-manager.js"></script>
     <script type="module" src="js/ui.js"></script>
     <script type="module" src="js/main.js"></script>
+
+    <!-- Phase 18.99 Part 5: QA System (The Inquisitor) -->
+    <script type="module">
+        import QA from './js/qa_system.js';
+        window.QA = QA;
+        console.log('✅ QA 系統已載入！使用 QA.runFullSuite() 開始測試');
+    </script>
 </body>
 </html>
