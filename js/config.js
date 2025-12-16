@@ -102,11 +102,12 @@ export const RIVER_GEN_CONSTANTS = {
     DEFAULT_DROPLET_COUNT: 10000,        // 預設水滴數量
 
     // Phase 18: 水力侵蝕參數（Hydraulic Erosion）
+    // Phase 18.99 Final: Aggressive Tuning for Fill & Spill
     EROSION_RATE: 0.003,                 // 侵蝕率（下坡時削減高度）
-    DEPOSITION_RATE: 0.008,              // 沉積率（填坑時增加高度）
-    MIN_SLOPE_FOR_EROSION: 0.01,         // 最小坡度閾值（低於此值不侵蝕）
-    EVAPORATION_RATE: 0.02,              // 蒸發率（水滴每步損失水量）
-    INITIAL_WATER_VOLUME: 1.0,           // 水滴初始水量
+    DEPOSITION_RATE: 0.02,               // 沉積率（填坑時增加高度）⬆️ 2.5x 提高填充速度
+    MIN_SLOPE_FOR_EROSION: 0.001,        // 最小坡度閾值（低於此值不侵蝕）⬇️ 降低以避免平地卡住
+    EVAPORATION_RATE: 0.001,             // 蒸發率（水滴每步損失水量）⬇️ 20x 降低，延長水滴壽命
+    INITIAL_WATER_VOLUME: 20.0,          // 水滴初始水量 ⬆️ 20x 提高，攜帶更多沉積物
     MIN_WATER_VOLUME: 0.01,              // 最小水量（低於此值水滴消失）
 
     // Flux 到濕度的轉換係數

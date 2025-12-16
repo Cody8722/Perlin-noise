@@ -780,7 +780,10 @@ function simulateDroplet(startX, startY) {
             }
 
             // Phase 3: 溢出決策（Overflow Decision）
-            if (updatedHeight >= lowestNeighborHeight && (overflowX !== x || overflowY !== y)) {
+            // Phase 18.99 Final: 加入容錯值（Tolerance）- 避免因浮點數精度卡住
+            const OVERFLOW_TOLERANCE = 0.001;  // 容許 0.1% 的高度差
+
+            if (updatedHeight >= lowestNeighborHeight - OVERFLOW_TOLERANCE && (overflowX !== x || overflowY !== y)) {
                 // 湖泊已填滿，水滴可溢出到最低鄰居
                 // 繼續流動，連接河流網絡（Flux Continuity）
                 nextX = overflowX;

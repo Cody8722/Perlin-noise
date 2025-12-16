@@ -332,7 +332,10 @@ function simulateDroplet(startX, startY, config) {
             }
 
             // Phase 3: 溢出決策（Overflow Decision）
-            if (updatedHeight >= lowestNeighborHeight && (overflowX !== x || overflowY !== y)) {
+            // Phase 18.99 Final: 加入容錯值（Tolerance）- 避免因浮點數精度卡住
+            const OVERFLOW_TOLERANCE = 0.001;  // 容許 0.1% 的高度差
+
+            if (updatedHeight >= lowestNeighborHeight - OVERFLOW_TOLERANCE && (overflowX !== x || overflowY !== y)) {
                 // Fix L2: 溢出成功 - 不標記湖泊（水仍在流動）
                 // 繼續流動，連接河流網絡（Flux Continuity）
                 nextX = overflowX;
