@@ -6,6 +6,7 @@
 import { initRenderer, renderAll } from './renderer.js';
 import { generateTerrain, getHeight, getMoisture, getTemperature } from './terrain.js';
 import { initUI } from './ui.js';
+import { initUI as initModernUI } from './ui_controller.js';  // Phase 19.0: 現代化 UI 控制器
 import noise from './noise.js';
 import { terrainConfig, getBiomeColor } from './config.js';
 import comprehensiveTestBot from './comprehensive-test-bot.js';  // Phase 12.5: 綜合測試機器人
@@ -144,6 +145,9 @@ function init() {
 
     // 4. 初始化 UI 控制
     initUI();
+
+    // 5. Phase 19.0: 初始化現代化 UI 控制器（自動生成 + 雲層禁用）
+    initModernUI({ renderAll });
 
     console.log('✅ 初始化完成！');
 
