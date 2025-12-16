@@ -230,6 +230,15 @@ export const PERFORMANCE_LIMITS = {
  * @returns {Object} 設備配置 { type, riverDensity, label }
  */
 function detectDeviceType() {
+    // Worker 環境檢測：Worker 中沒有 window 物件
+    if (typeof window === 'undefined') {
+        return {
+            type: 'desktop',
+            riverDensity: PERFORMANCE_LIMITS.RECOMMENDED_DESKTOP,
+            label: '🖥️ Worker 環境（桌面預設值）'
+        };
+    }
+
     const width = window.innerWidth || 1024;  // 預設桌面寬度
     const isMobile = width < 768;
 
@@ -248,14 +257,8 @@ function detectDeviceType() {
     }
 }
 
-// Phase 14: 執行設備檢測（僅在瀏覽器環境，Worker 環境跳過）
-const deviceConfig = typeof window !== 'undefined'
-    ? detectDeviceType()
-    : {
-        type: 'desktop',
-        riverDensity: PERFORMANCE_LIMITS.RECOMMENDED_DESKTOP,
-        label: '🖥️ Worker 環境（桌面預設值）'
-    };
+// Phase 14: 執行設備檢測（函數內部已有 Worker 環境保護）
+const deviceConfig = detectDeviceType();
 
 // 僅在瀏覽器主執行緒輸出檢測結果
 if (typeof window !== 'undefined') {
