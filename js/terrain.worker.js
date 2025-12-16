@@ -46,7 +46,7 @@ let mapData = null;
  * 主訊息處理器
  */
 self.onmessage = function(e) {
-    const { cmd, config, data, numDroplets } = e.data;
+    const { cmd, config, data, numDroplets, previewConfig } = e.data;
 
     try {
         switch (cmd) {
@@ -58,6 +58,11 @@ self.onmessage = function(e) {
             case 'generateRivers':
                 // 執行河流生成
                 handleGenerateRivers(numDroplets);
+                break;
+
+            case 'generatePreview':
+                // Phase 20.5: 快速預覽模式（僅生成地形，跳過河流）
+                handleGeneratePreview(previewConfig);
                 break;
 
             default:
@@ -378,4 +383,143 @@ function simulateDroplet(startX, startY, config) {
     }
 
     return pathLength;
+}
+
+/**
+ * ========================================
+ * Phase 20.5: 快速預覽生成（LOD 優化）
+ * ========================================
+ * 處理快速預覽命令（拖動時使用）
+ * - 僅生成地形（Height, Moisture, Temperature）
+ * - 跳過河流模擬（Hydraulic Erosion）
+ * - 支援降解析度（resolution < 1.0）
+ * - 支援世界座標偏移（offsetX/offsetY）
+ *
+ * @param {Object} previewConfig - 預覽配置
+ *   - width: 地圖寬度
+ *   - height: 地圖高度
+ *   - offsetX: 世界座標 X 偏移
+ *   - offsetY: 世界座標 Y 偏移
+ *   - resolution: 解析度 (1.0 = 全解析度, 0.5 = 半解析度)
+ *   - seed: 噪聲種子
+ *   - scale: 噪聲縮放
+ *   - octaves: 噪聲八度數
+ *   - seaLevel: 海平面高度
+ */
+function handleGeneratePreview(previewConfig) {
+    const {
+        width,
+        height,
+        offsetX = 0,
+        offsetY = 0,
+        resolution = 1.0,
+        seed,
+        scale,
+        octaves,
+        seaLevel,
+        moistureOffset = 0,
+        temperatureOffset = 0
+    } = previewConfig;
+
+    // 計算實際渲染尺寸（支援降解析度）
+    const renderWidth = Math.floor(width * resolution);
+    const renderHeight = Math.floor(height * resolution);
+    const totalPixels = renderWidth * renderHeight;
+
+    // 初始化 Perlin Noise
+    if (typeof noise !== 'undefined' && typeof noise.seed === 'function') {
+        noise.seed(seed);
+    } else if (typeof noise !== 'undefined' && typeof noise.init === 'function') {
+        noise.init(seed);
+    }
+
+    // 創建輸出陣列
+    const heightData = new Float32Array(totalPixels);
+    const moistureData = new Float32Array(totalPixels);
+    const temperatureData = new Float32Array(totalPixels);
+
+    // 常數（來自 terrain.js 的 TERRAIN_GEN_CONSTANTS）
+    const MOISTURE_OCTAVES = 3;
+    const MOISTURE_SCALE_MULTIPLIER = 2.5;
+    const MOISTURE_SEED_OFFSET = 1000;
+    const TEMPERATURE_OCTAVES = 2;
+    const TEMPERATURE_SCALE_MULTIPLIER = 3.0;
+    const TEMPERATURE_SEED_OFFSET = 2000;
+    const TEMPERATURE_LATITUDE_FACTOR = 2.0;
+    const TEMPERATURE_ELEVATION_FACTOR = 0.5;
+    const LATITUDE_PERIOD = 10000;
+
+    // 生成地形資料
+    for (let y = 0; y < renderHeight; y++) {
+        for (let x = 0; x < renderWidth; x++) {
+            const index = y * renderWidth + x;
+
+            // 轉換到世界座標（考慮解析度縮放）
+            const worldX = (x / resolution) + offsetX;
+            const worldY = (y / resolution) + offsetY;
+
+            // 1. 生成高度（Height - FBM）
+            const height = noise.fbm(
+                worldX,
+                worldY,
+                octaves,
+                scale,
+                0  // 高度層無偏移
+            );
+            heightData[index] = height;
+
+            // 2. 生成濕度（Moisture - FBM）
+            const moisture = noise.fbm(
+                worldX,
+                worldY,
+                MOISTURE_OCTAVES,
+                scale * MOISTURE_SCALE_MULTIPLIER,
+                MOISTURE_SEED_OFFSET
+            ) + moistureOffset;
+            moistureData[index] = moisture;
+
+            // 3. 生成溫度（Temperature - 緯度 + 噪聲 + 海拔）
+            // 緯度循環（無限氣候帶）
+            const normalizedY = (worldY % LATITUDE_PERIOD + LATITUDE_PERIOD) % LATITUDE_PERIOD;
+            const latitude = normalizedY / LATITUDE_PERIOD;
+            const latitudeFactor = 1 - Math.abs(latitude - 0.5) * TEMPERATURE_LATITUDE_FACTOR;
+
+            // 溫度噪聲
+            const temperatureNoise = noise.fbm(
+                worldX,
+                worldY,
+                TEMPERATURE_OCTAVES,
+                scale * TEMPERATURE_SCALE_MULTIPLIER,
+                TEMPERATURE_SEED_OFFSET
+            );
+
+            // 海拔影響（高海拔更冷）
+            const elevationFactor = height > seaLevel
+                ? Math.max(0, 1 - (height - seaLevel) * TEMPERATURE_ELEVATION_FACTOR)
+                : 1.0;
+
+            // 組合溫度（歸一化到 0-1）
+            const temperature = (latitudeFactor * 0.6 + temperatureNoise * 0.4) * elevationFactor + temperatureOffset;
+            temperatureData[index] = Math.max(0, Math.min(1, temperature));
+        }
+    }
+
+    // 回傳預覽資料（使用 Transferable Objects 零複製）
+    const response = {
+        type: 'preview',
+        data: {
+            height: heightData,
+            moisture: moistureData,
+            temperature: temperatureData,
+            width: renderWidth,
+            height: renderHeight,
+            resolution: resolution
+        }
+    };
+
+    self.postMessage(response, [
+        heightData.buffer,
+        moistureData.buffer,
+        temperatureData.buffer
+    ]);
 }

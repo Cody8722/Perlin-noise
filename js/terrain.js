@@ -238,6 +238,79 @@ class TerrainWorkerController {
 // Create singleton controller instance
 const workerController = new TerrainWorkerController();
 
+/**
+ * Phase 20.5: 暴露 Worker 訪問函數（用於 LOD 預覽）
+ * @returns {Promise<Worker>} Worker 實例
+ */
+export async function getTerrainWorker() {
+    // 確保 Worker 已初始化
+    await workerController.init();
+    return workerController.worker;
+}
+
+/**
+ * Phase 20.5: 設置預覽訊息處理器
+ * 當 Worker 完成預覽生成後，自動更新地圖資料並渲染
+ * @param {function} renderCallback - 渲染回調函數
+ */
+export async function setupPreviewHandler(renderCallback) {
+    const worker = await getTerrainWorker();
+
+    // 保存原始的 onmessage handler（如果有的話）
+    const originalHandler = worker.onmessage;
+
+    // 設置複合訊息處理器（同時處理預覽和其他訊息）
+    worker.onmessage = (e) => {
+        const { type, data } = e.data;
+
+        if (type === 'preview') {
+            // 處理預覽資料
+            console.log(`🎨 收到預覽資料 (${data.width}x${data.height}, resolution: ${data.resolution})`);
+
+            // 將低解析度資料放大到全解析度
+            const fullWidth = MAP_CONFIG.width;
+            const fullHeight = MAP_CONFIG.height;
+
+            // 簡單的最近鄰插值（快速）
+            const previewWidth = data.width;
+            const previewHeight = data.height;
+            const scaleX = fullWidth / previewWidth;
+            const scaleY = fullHeight / previewHeight;
+
+            for (let y = 0; y < fullHeight; y++) {
+                for (let x = 0; x < fullWidth; x++) {
+                    const fullIndex = y * fullWidth + x;
+
+                    // 找到對應的預覽像素（最近鄰）
+                    const previewX = Math.floor(x / scaleX);
+                    const previewY = Math.floor(y / scaleY);
+                    const previewIndex = previewY * previewWidth + previewX;
+
+                    // 複製資料
+                    mapData.height[fullIndex] = data.height[previewIndex];
+                    mapData.moisture[fullIndex] = data.moisture[previewIndex];
+                    mapData.baseMoisture[fullIndex] = data.moisture[previewIndex];
+                    mapData.temperature[fullIndex] = data.temperature[previewIndex];
+                }
+            }
+
+            // 清空 flux 和 lakes（預覽模式沒有河流）
+            mapData.flux.fill(0);
+            mapData.lakes.fill(0);
+
+            // 觸發渲染
+            if (renderCallback) {
+                renderCallback();
+            }
+
+            console.log('✅ 預覽渲染完成');
+        } else if (originalHandler) {
+            // 轉發其他訊息給原始處理器
+            originalHandler(e);
+        }
+    };
+}
+
 // 地圖資料儲存
 export const mapData = {
     height: new Float32Array(MAP_CONFIG.width * MAP_CONFIG.height),

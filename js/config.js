@@ -282,7 +282,9 @@ export const terrainConfig = {
     // Phase 20: Infinite Map - 相機偏移與縮放
     offsetX: 0,                // 世界座標 X 偏移（拖動地圖時改變）
     offsetY: 0,                // 世界座標 Y 偏移（拖動地圖時改變）
-    zoom: 1.0                  // 縮放等級（預留功能，暫未實作）
+    zoom: 1.0,                 // 縮放等級（預留功能，暫未實作）
+    // Phase 20.5: LOD (Level of Detail) 優化
+    resolution: 1.0            // 渲染解析度（1.0=全解析度，0.5=半解析度，用於拖動預覽）
 };
 
 // 生物群系顏色配置（Whittaker 分類系統擴展）

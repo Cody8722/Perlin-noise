@@ -243,14 +243,19 @@ function hideGeneratingIndicator() {
 
 /**
  * ========================================
- * Phase 20: 無限地圖拖動系統
+ * Phase 20.5: 絲滑無限地圖拖動系統（LOD 優化）
  * ========================================
  * 滑鼠拖動 Canvas 以平移無限世界
  *
- * @param {Object} renderCallback - 渲染回調函數 { renderAll }
+ * 關鍵優化：
+ * - **拖動時：** 快速預覽（Worker 生成低解析度地形，跳過河流）
+ * - **停止時：** 完整渲染（全解析度 + 河流模擬）
+ * - **節流：** 使用 requestAnimationFrame 限制更新頻率到螢幕刷新率
+ *
+ * @param {Object} renderCallback - 渲染回調函數 { renderAll, renderPreview }
  */
 export function setupMapDragging(renderCallback) {
-    console.log('🗺️  設置無限地圖拖動系統...');
+    console.log('🗺️  設置絲滑無限地圖拖動系統 (LOD)...');
 
     const canvas = document.getElementById('terrainLayer');
     if (!canvas) {
@@ -261,41 +266,95 @@ export function setupMapDragging(renderCallback) {
     let isDragging = false;
     let lastX = 0;
     let lastY = 0;
+    let rafId = null;  // requestAnimationFrame ID
+    let pendingUpdate = false;  // 是否有待處理的更新
 
-    // 防抖延遲（拖動停止後延遲生成，避免拖動時頻繁重新生成）
-    const DRAG_DEBOUNCE_DELAY = 500;  // 0.5 秒
+    // LOD 配置
+    const PREVIEW_RESOLUTION = 0.5;  // 拖動時使用 50% 解析度（4倍速）
+    const DRAG_DEBOUNCE_DELAY = 500;  // 停止拖動後 0.5 秒生成完整版
+
+    /**
+     * 快速預覽生成（拖動時呼叫）
+     * 使用 Worker 生成低解析度地形（無河流）
+     */
+    async function generatePreview() {
+        try {
+            const { terrainConfig, MAP_CONFIG } = await import('./config.js');
+            const { getTerrainWorker } = await import('./terrain.js');
+
+            const worker = await getTerrainWorker();
+
+            // 準備預覽配置
+            const previewConfig = {
+                width: MAP_CONFIG.width,
+                height: MAP_CONFIG.height,
+                offsetX: terrainConfig.offsetX,
+                offsetY: terrainConfig.offsetY,
+                resolution: PREVIEW_RESOLUTION,
+                seed: terrainConfig.seed,
+                scale: terrainConfig.scale,
+                octaves: terrainConfig.octaves,
+                seaLevel: terrainConfig.seaLevel,
+                moistureOffset: terrainConfig.moistureOffset,
+                temperatureOffset: terrainConfig.temperatureOffset
+            };
+
+            // 發送預覽生成命令到 Worker
+            worker.postMessage({
+                cmd: 'generatePreview',
+                previewConfig: previewConfig
+            });
+
+        } catch (error) {
+            console.error('❌ 預覽生成失敗:', error);
+        }
+    }
 
     /**
      * 拖動結束後的防抖生成（完整地形 + 河流）
      */
-    const debouncedDragGeneration = debounce(async () => {
-        console.log('🌍 拖動完成：重新生成地形與河流...');
-        showGeneratingIndicator('拖動地圖 - 生成中...');
+    const debouncedFullGeneration = debounce(async () => {
+        console.log('🌍 拖動完成：生成完整地形與河流...');
+        showGeneratingIndicator('生成高品質地圖...');
 
         try {
-            // 動態導入（避免循環依賴）
             const { generateTerrain, generateRivers } = await import('./terrain.js');
             const { terrainConfig } = await import('./config.js');
 
-            // 1. 生成地形（使用新的 offsetX/offsetY）
+            // 1. 生成完整地形（全解析度）
+            terrainConfig.resolution = 1.0;
             generateTerrain();
 
-            // 2. 生成河流
+            // 2. 生成河流（慢，但詳細）
             const riverDensity = terrainConfig.riverDensity || 10000;
             await generateRivers(riverDensity);
 
-            // 3. 渲染
+            // 3. 渲染完整版本
             if (renderCallback && renderCallback.renderAll) {
                 renderCallback.renderAll();
             }
 
             hideGeneratingIndicator();
-            console.log('✅ 拖動生成完成');
+            console.log('✅ 完整地圖生成完成');
         } catch (error) {
             hideGeneratingIndicator();
-            console.error('❌ 拖動生成失敗:', error);
+            console.error('❌ 完整生成失敗:', error);
         }
     }, DRAG_DEBOUNCE_DELAY);
+
+    /**
+     * 節流更新函數（使用 requestAnimationFrame）
+     * 限制更新頻率到螢幕刷新率（通常 60fps）
+     */
+    function schedulePreviewUpdate() {
+        if (pendingUpdate) return;  // 已有待處理的更新，跳過
+
+        pendingUpdate = true;
+        rafId = requestAnimationFrame(async () => {
+            pendingUpdate = false;
+            await generatePreview();
+        });
+    }
 
     // 滑鼠按下 - 開始拖動
     canvas.addEventListener('mousedown', (e) => {
@@ -303,9 +362,10 @@ export function setupMapDragging(renderCallback) {
         lastX = e.clientX;
         lastY = e.clientY;
         canvas.style.cursor = 'grabbing';
+        console.log('🖱️  開始拖動（預覽模式）');
     });
 
-    // 滑鼠移動 - 更新偏移
+    // 滑鼠移動 - 更新偏移並觸發預覽
     canvas.addEventListener('mousemove', async (e) => {
         if (!isDragging) return;
 
@@ -320,23 +380,30 @@ export function setupMapDragging(renderCallback) {
         // 動態導入 terrainConfig
         const { terrainConfig } = await import('./config.js');
 
-        // 更新世界座標偏移（注意：滑鼠向右拖 = 地圖向右移 = 世界向左偏移）
-        // 所以是減法，不是加法
+        // 更新世界座標偏移
         terrainConfig.offsetX -= deltaX;
         terrainConfig.offsetY -= deltaY;
 
-        // 即時視覺回饋（顯示當前偏移）
-        console.log(`🗺️  拖動中... offsetX: ${terrainConfig.offsetX}, offsetY: ${terrainConfig.offsetY}`);
+        // 使用 requestAnimationFrame 節流預覽生成
+        schedulePreviewUpdate();
     });
 
-    // 滑鼠放開 - 停止拖動並觸發生成
+    // 滑鼠放開 - 停止拖動並觸發完整生成
     canvas.addEventListener('mouseup', () => {
         if (isDragging) {
             isDragging = false;
             canvas.style.cursor = 'grab';
 
-            // 觸發防抖生成（拖動停止後才生成，避免拖動中卡頓）
-            debouncedDragGeneration();
+            // 取消待處理的預覽更新
+            if (rafId) {
+                cancelAnimationFrame(rafId);
+                rafId = null;
+            }
+
+            console.log('🖱️  停止拖動（生成完整版本）');
+
+            // 觸發完整生成（防抖）
+            debouncedFullGeneration();
         }
     });
 
@@ -346,16 +413,25 @@ export function setupMapDragging(renderCallback) {
             isDragging = false;
             canvas.style.cursor = 'grab';
 
-            // 同樣觸發生成
-            debouncedDragGeneration();
+            // 取消待處理的預覽更新
+            if (rafId) {
+                cancelAnimationFrame(rafId);
+                rafId = null;
+            }
+
+            console.log('🖱️  拖動中斷（生成完整版本）');
+
+            // 同樣觸發完整生成
+            debouncedFullGeneration();
         }
     });
 
     // 設定預設游標為 'grab'
     canvas.style.cursor = 'grab';
 
-    console.log('✅ 無限地圖拖動已啟用');
-    console.log('   🖱️  滑鼠拖動 Canvas 即可探索無限世界');
+    console.log('✅ 絲滑無限地圖拖動已啟用（LOD 優化）');
+    console.log('   🖱️  拖動時：50% 解析度預覽（快速）');
+    console.log('   🎨  停止時：100% 解析度 + 河流（詳細）');
 }
 
 /**

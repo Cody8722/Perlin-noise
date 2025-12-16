@@ -4,7 +4,7 @@
  */
 
 import { initRenderer, renderAll } from './renderer.js';
-import { generateTerrain, getHeight, getMoisture, getTemperature } from './terrain.js';
+import { generateTerrain, getHeight, getMoisture, getTemperature, setupPreviewHandler } from './terrain.js';  // Phase 20.5: 新增 setupPreviewHandler
 import { initUI } from './ui.js';
 import { initUI as initModernUI } from './ui_controller.js';  // Phase 19.0: 現代化 UI 控制器
 import noise from './noise.js';
@@ -149,9 +149,12 @@ function init() {
     // 5. Phase 19.0: 初始化現代化 UI 控制器（自動生成 + 雲層禁用）
     initModernUI({ renderAll });
 
+    // 6. Phase 20.5: 設置預覽訊息處理器（LOD 優化）
+    setupPreviewHandler(renderAll);
+
     console.log('✅ 初始化完成！');
 
-    // 5. 執行 Golden Master 回歸測試
+    // 7. 執行 Golden Master 回歸測試
     console.log('');
     runGoldenMaster();
 
