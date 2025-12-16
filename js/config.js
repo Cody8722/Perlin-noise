@@ -248,9 +248,19 @@ function detectDeviceType() {
     }
 }
 
-// Phase 14: 執行設備檢測
-const deviceConfig = detectDeviceType();
-console.log(`🎯 設備檢測: ${deviceConfig.label} → 河流密度預設值: ${deviceConfig.riverDensity.toLocaleString()}`);
+// Phase 14: 執行設備檢測（僅在瀏覽器環境，Worker 環境跳過）
+const deviceConfig = typeof window !== 'undefined'
+    ? detectDeviceType()
+    : {
+        type: 'desktop',
+        riverDensity: PERFORMANCE_LIMITS.RECOMMENDED_DESKTOP,
+        label: '🖥️ Worker 環境（桌面預設值）'
+    };
+
+// 僅在瀏覽器主執行緒輸出檢測結果
+if (typeof window !== 'undefined') {
+    console.log(`🎯 設備檢測: ${deviceConfig.label} → 河流密度預設值: ${deviceConfig.riverDensity.toLocaleString()}`);
+}
 
 // 地形生成參數
 export const terrainConfig = {
