@@ -133,11 +133,28 @@ function handleGenerateRivers(numDroplets) {
         }
     }
 
+    // Phase 20.5: 優雅處理全海洋區域（無限地圖可能拖動到純海洋區域）
     if (landCoords.length === 0) {
-        self.postMessage({
-            type: 'error',
-            message: 'No land found above sea level',
-        });
+        console.log('   🌊 此區域為純海洋，跳過河流生成');
+
+        // 直接回傳空的 flux 和 lakes（已經在上面 fill(0) 了）
+        const transferData = {
+            type: 'complete',
+            data: {
+                flux: mapData.flux,
+                lakes: mapData.lakes,
+            },
+            stats: {
+                totalDroplets: numDroplets,
+                successfulDroplets: 0,
+                elapsedTime: 0,
+            },
+        };
+
+        self.postMessage(transferData, [
+            mapData.flux.buffer,
+            mapData.lakes.buffer,
+        ]);
         return;
     }
 
