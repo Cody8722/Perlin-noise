@@ -636,14 +636,3 @@ export function drawWorld(ctx, blockManager, camera, viewportWidth, viewportHeig
         }
     }
 }
-
-/**
- * Alpha 混合函數（從原有代碼複製，確保兼容）
- */
-function blendColors(foreground, background, alpha) {
-    return [
-        Math.round(foreground[0] * alpha + background[0] * (1 - alpha)),
-        Math.round(foreground[1] * alpha + background[1] * (1 - alpha)),
-        Math.round(foreground[2] * alpha + background[2] * (1 - alpha))
-    ];
-}
