@@ -426,6 +426,8 @@ function simulateDroplet(startX, startY, config) {
  *   - seaLevel: 海平面高度
  */
 function handleGeneratePreview(previewConfig) {
+    console.log('⚡ Worker: handleGeneratePreview 被呼叫');
+
     const {
         width,
         height,
@@ -444,6 +446,8 @@ function handleGeneratePreview(previewConfig) {
     const renderWidth = Math.floor(width * resolution);
     const renderHeight = Math.floor(height * resolution);
     const totalPixels = renderWidth * renderHeight;
+
+    console.log(`⚡ Worker: 開始生成預覽 (${renderWidth}x${renderHeight}, offset: ${offsetX},${offsetY})`);
 
     // 初始化 Perlin Noise
     if (typeof noise !== 'undefined' && typeof noise.seed === 'function') {
@@ -536,9 +540,13 @@ function handleGeneratePreview(previewConfig) {
         }
     };
 
+    console.log(`⚡ Worker: 預覽生成完成，準備回傳 (${renderWidth}x${renderHeight})`);
+
     self.postMessage(response, [
         heightData.buffer,
         moistureData.buffer,
         temperatureData.buffer
     ]);
+
+    console.log('⚡ Worker: 預覽資料已發送');
 }

@@ -278,11 +278,13 @@ export function setupMapDragging(renderCallback) {
      * 使用 Worker 生成低解析度地形（無河流）
      */
     async function generatePreview() {
+        console.log('⚡ generatePreview() 被呼叫');
         try {
             const { terrainConfig, MAP_CONFIG } = await import('./config.js');
             const { getTerrainWorker } = await import('./terrain.js');
 
             const worker = await getTerrainWorker();
+            console.log('⚡ Worker 已取得，準備發送預覽命令');
 
             // 準備預覽配置
             const previewConfig = {
@@ -304,6 +306,7 @@ export function setupMapDragging(renderCallback) {
                 cmd: 'generatePreview',
                 previewConfig: previewConfig
             });
+            console.log('⚡ 預覽命令已發送到 Worker');
 
         } catch (error) {
             console.error('❌ 預覽生成失敗:', error);
@@ -351,8 +354,14 @@ export function setupMapDragging(renderCallback) {
 
         pendingUpdate = true;
         rafId = requestAnimationFrame(async () => {
-            pendingUpdate = false;
-            await generatePreview();
+            try {
+                await generatePreview();
+            } catch (error) {
+                console.error('❌ RAF 預覽更新失敗:', error);
+            } finally {
+                // 確保 pendingUpdate 總是被重置（即使發生錯誤）
+                pendingUpdate = false;
+            }
         });
     }
 
