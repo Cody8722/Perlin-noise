@@ -11,6 +11,7 @@
 import noise from './noise.js';
 import {
     MAP_CONFIG,
+    BLOCK_CONFIG,  // Phase 21.5: 區塊配置
     terrainConfig,
     getBiomeColor,
     RENDER_CONSTANTS
@@ -604,24 +605,24 @@ export function drawWorld(ctx, blockManager, camera, viewportWidth, viewportHeig
 
         // 如果區塊未載入，顯示佔位符
         if (!block.isLoaded) {
-            const worldX = blockX * blockManager.BLOCK_WIDTH;
-            const worldY = blockY * blockManager.BLOCK_HEIGHT;
+            const worldX = blockX * BLOCK_CONFIG.WIDTH;
+            const worldY = blockY * BLOCK_CONFIG.HEIGHT;
             const screenX = worldX - camera.x;
             const screenY = worldY - camera.y;
 
             // 繪製載入中佔位符（灰色邊框 + 文字）
             ctx.strokeStyle = '#666';
             ctx.lineWidth = 2;
-            ctx.strokeRect(screenX, screenY, blockManager.BLOCK_WIDTH, blockManager.BLOCK_HEIGHT);
-            
+            ctx.strokeRect(screenX, screenY, BLOCK_CONFIG.WIDTH, BLOCK_CONFIG.HEIGHT);
+
             ctx.fillStyle = '#999';
             ctx.font = '48px Arial';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText(
                 `Loading Block (${blockX}, ${blockY})...`,
-                screenX + blockManager.BLOCK_WIDTH / 2,
-                screenY + blockManager.BLOCK_HEIGHT / 2
+                screenX + BLOCK_CONFIG.WIDTH / 2,
+                screenY + BLOCK_CONFIG.HEIGHT / 2
             );
 
             continue;
@@ -634,8 +635,8 @@ export function drawWorld(ctx, blockManager, camera, viewportWidth, viewportHeig
 
         // 繪製區塊 Canvas 到主 Canvas
         if (block.canvas) {
-            const worldX = blockX * blockManager.BLOCK_WIDTH;
-            const worldY = blockY * blockManager.BLOCK_HEIGHT;
+            const worldX = blockX * BLOCK_CONFIG.WIDTH;
+            const worldY = blockY * BLOCK_CONFIG.HEIGHT;
             const screenX = worldX - camera.x;
             const screenY = worldY - camera.y;
 
