@@ -118,9 +118,11 @@ function handleGenerateRivers(numDroplets) {
     const config = workerConfig;
     const { width, height } = mapData;
 
-    // 重置 flux 和 lakes 資料
-    mapData.flux.fill(0);
-    mapData.lakes.fill(0);
+    // Phase 20.5: 重新創建 flux 和 lakes 陣列
+    // （避免 Transferable Objects 傳輸後的 detached buffer 問題）
+    const totalPixels = width * height;
+    mapData.flux = new Float32Array(totalPixels);
+    mapData.lakes = new Uint8Array(totalPixels);
 
     // 收集所有陸地座標（高於海平面）
     const landCoords = [];
