@@ -3,12 +3,13 @@
  * RPG 世界生成器初始化流程
  */
 
-import { initRenderer, renderAll } from './renderer.js';
-import { generateTerrain, getHeight, getMoisture, getTemperature, setupPreviewHandler } from './terrain.js';  // Phase 20.5: 新增 setupPreviewHandler
+import { initRenderer, renderAll, renderBlockToCache, drawWorld } from './renderer.js';  // Phase 21.5: 新增區塊渲染函數
+import { generateTerrain, getHeight, getMoisture, getTemperature, setupPreviewHandler, loadBlock } from './terrain.js';  // Phase 20.5: 新增 setupPreviewHandler, Phase 21: 新增 loadBlock
 import { initUI } from './ui.js';
 import { initUI as initModernUI } from './ui_controller.js';  // Phase 19.0: 現代化 UI 控制器
 import noise from './noise.js';
-import { terrainConfig, getBiomeColor } from './config.js';
+import { terrainConfig, getBiomeColor, BLOCK_CONFIG } from './config.js';  // Phase 21: 新增 BLOCK_CONFIG
+import { getBlockManager } from './block_manager.js';  // Phase 21: 區塊管理器
 import comprehensiveTestBot from './comprehensive-test-bot.js';  // Phase 12.5: 綜合測試機器人
 import stressBot from './stress-test.js';                        // Phase 13: 壓力測試機器人
 
@@ -193,9 +194,140 @@ function exposeTestAPIs() {
     console.log('   - runStressTest() ← Phase 13 壓力測試');
 }
 
+// ========================================
+// Phase 21.5: 無限地圖渲染系統
+// ========================================
+
+/**
+ * 相機對象（世界座標）
+ */
+const camera = {
+    x: 0,
+    y: 0
+};
+
+/**
+ * 無限地圖渲染循環
+ */
+let isInfiniteMapMode = false;  // 標記是否啟用無限地圖模式
+
+function startInfiniteMap() {
+    console.log('🗺️ 啟動無限地圖模式...');
+    isInfiniteMapMode = true;
+
+    const canvas = document.getElementById('terrainLayer');
+    const ctx = canvas.getContext('2d');
+    const blockManager = getBlockManager();
+
+    // 視口尺寸
+    const viewportWidth = canvas.width;
+    const viewportHeight = canvas.height;
+
+    // 載入初始區塊（Block 0,0）
+    console.log('📦 載入初始區塊(0, 0)...');
+    loadBlock(0, 0).then(block => {
+        console.log('✅ 初始區塊載入完成，開始渲染');
+        animate();
+    }).catch(error => {
+        console.error('❌ 初始區塊載入失敗:', error);
+    });
+
+    // 渲染循環
+    function animate() {
+        if (!isInfiniteMapMode) return;
+
+        // 更新區塊管理器（觸發卸載邏輯）
+        blockManager.updateCamera(camera.x, camera.y);
+
+        // 繪製世界
+        drawWorld(ctx, blockManager, camera, viewportWidth, viewportHeight);
+
+        // 繼續循環
+        requestAnimationFrame(animate);
+    }
+
+    // 無限拖動系統（取代 ui_controller.js 的拖動）
+    setupInfiniteDragging(canvas, blockManager);
+}
+
+/**
+ * 設置無限拖動系統
+ */
+function setupInfiniteDragging(canvas, blockManager) {
+    let isDragging = false;
+    let lastX = 0;
+    let lastY = 0;
+
+    canvas.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        lastX = e.clientX;
+        lastY = e.clientY;
+        canvas.style.cursor = 'grabbing';
+        console.log('🖱️  開始無限拖動');
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+
+        const deltaX = e.clientX - lastX;
+        const deltaY = e.clientY - lastY;
+
+        // 更新相機位置（世界座標，無邊界）
+        camera.x -= deltaX;
+        camera.y -= deltaY;
+
+        lastX = e.clientX;
+        lastY = e.clientY;
+
+        // 檢查是否需要載入新區塊
+        const currentBlockCoords = blockManager.worldToBlockCoords(camera.x, camera.y);
+        const requiredBlocks = blockManager.getRequiredBlocks(
+            camera.x + canvas.width / 2,
+            camera.y + canvas.height / 2,
+            canvas.width,
+            canvas.height
+        );
+
+        // 異步載入缺失的區塊
+        for (const {blockX, blockY} of requiredBlocks) {
+            const block = blockManager.getOrCreateBlock(blockX, blockY);
+            if (!block.isLoaded && !block.isLoading) {
+                console.log(`📥 開始載入區塊(${blockX}, ${blockY})`);
+                loadBlock(blockX, blockY).catch(err => {
+                    console.error(`❌ 區塊(${blockX}, ${blockY}) 載入失敗:`, err);
+                });
+            }
+        }
+    });
+
+    canvas.addEventListener('mouseup', () => {
+        if (isDragging) {
+            isDragging = false;
+            canvas.style.cursor = 'grab';
+            console.log('🖱️  停止拖動');
+        }
+    });
+
+    canvas.addEventListener('mouseleave', () => {
+        if (isDragging) {
+            isDragging = false;
+            canvas.style.cursor = 'grab';
+        }
+    });
+
+    canvas.style.cursor = 'grab';
+    console.log('✅ 無限拖動系統已啟用');
+}
+
 // 等待 DOM 載入完成後執行
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
+    document.addEventListener('DOMContentLoaded', () => {
+        init();
+        // Phase 21.5: 啟動無限地圖模式
+        startInfiniteMap();
+    });
 } else {
     init();
+    // Phase 21.5: 啟動無限地圖模式
+    startInfiniteMap();
 }

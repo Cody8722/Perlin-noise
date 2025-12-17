@@ -452,3 +452,198 @@ export function renderAll() {
     renderTerrain();
     renderClouds();
 }
+
+// ========================================
+// Phase 21.5: 區塊化無限地圖渲染系統
+// ========================================
+
+/**
+ * 將區塊渲染到離屏 Canvas（緩存）
+ * 包含完整的生物群系、河流、湖泊渲染
+ * 
+ * @param {BlockData} block - 區塊數據對象
+ */
+export function renderBlockToCache(block) {
+    if (!block.isLoaded) {
+        console.warn(`⚠️ 區塊(${block.blockX}, ${block.blockY}) 尚未載入數據`);
+        return;
+    }
+
+    console.log(`🎨 開始渲染區塊(${block.blockX}, ${block.blockY}) 到離屏 Canvas...`);
+
+    // 創建離屏 Canvas
+    if (!block.canvas) {
+        block.canvas = document.createElement('canvas');
+        block.canvas.width = block.width;
+        block.canvas.height = block.height;
+    }
+
+    const ctx = block.canvas.getContext('2d');
+    const imgData = ctx.createImageData(block.width, block.height);
+    const data = imgData.data;
+
+    // 計算最大 flux 值用於河流分級
+    const flux_data = block.flux || new Float32Array(block.width * block.height);
+    const maxFlux = Math.max(1, ...flux_data);
+
+    const MEDIUM_RIVER_THRESHOLD = maxFlux * RENDER_CONSTANTS.MEDIUM_RIVER_THRESHOLD;
+    const LARGE_RIVER_THRESHOLD = maxFlux * RENDER_CONSTANTS.LARGE_RIVER_THRESHOLD;
+
+    // 渲染每個像素
+    for (let y = 0; y < block.height; y++) {
+        for (let x = 0; x < block.width; x++) {
+            const index = y * block.width + x;
+            const h = block.height_data[index];
+            const m = block.moisture_data[index];
+            const t = block.temperature_data[index];
+            const flux = flux_data[index];
+
+            let color;
+
+            // 1. 海洋渲染（基於深度）
+            if (h < terrainConfig.seaLevel) {
+                const depth = terrainConfig.seaLevel - h;
+                if (depth > 0.15) {
+                    color = [68, 68, 122];  // 深海
+                } else if (depth > 0.05) {
+                    color = [48, 80, 160];  // 海洋
+                } else {
+                    color = [82, 130, 190]; // 淺海
+                }
+            }
+            // 2. 湖泊渲染（如果有湖泊數據）
+            else if (block.lakes && block.lakes[index] === 1) {
+                const biomeColor = getBiomeColor(h, m, t);
+                color = blendColors(
+                    RENDER_CONSTANTS.LAKE_COLOR,
+                    biomeColor,
+                    RENDER_CONSTANTS.LAKE_ALPHA
+                );
+            }
+            // 3. 河流渲染（flux > threshold）
+            else if (flux >= terrainConfig.riverThreshold) {
+                const biomeColor = getBiomeColor(h, m, t);
+                let riverColor, riverAlpha;
+
+                if (flux >= LARGE_RIVER_THRESHOLD) {
+                    riverColor = RENDER_CONSTANTS.RIVER_COLOR_LARGE;
+                    riverAlpha = RENDER_CONSTANTS.RIVER_ALPHA_LARGE;
+                } else if (flux >= MEDIUM_RIVER_THRESHOLD) {
+                    riverColor = RENDER_CONSTANTS.RIVER_COLOR_MEDIUM;
+                    riverAlpha = RENDER_CONSTANTS.RIVER_ALPHA_MEDIUM;
+                } else {
+                    riverColor = RENDER_CONSTANTS.RIVER_COLOR_SMALL;
+                    riverAlpha = RENDER_CONSTANTS.RIVER_ALPHA_SMALL;
+                }
+
+                color = blendColors(riverColor, biomeColor, riverAlpha);
+            }
+            // 4. 生物群系渲染（陸地）
+            else {
+                color = getBiomeColor(h, m, t);
+            }
+
+            // 簡化陰影效果（可選）
+            let shadow = 1;
+            if (x > 0) {
+                const leftHeight = block.height_data[index - 1];
+                if (leftHeight > h + RENDER_CONSTANTS.SHADOW_HEIGHT_THRESHOLD) {
+                    shadow = RENDER_CONSTANTS.SHADOW_INTENSITY;
+                }
+            }
+
+            // 設置像素顏色
+            const pixelIndex = index * 4;
+            data[pixelIndex] = color[0] * shadow;
+            data[pixelIndex + 1] = color[1] * shadow;
+            data[pixelIndex + 2] = color[2] * shadow;
+            data[pixelIndex + 3] = 255;
+        }
+    }
+
+    // 寫入離屏 Canvas
+    ctx.putImageData(imgData, 0, 0);
+    block.isRendered = true;
+
+    console.log(`✅ 區塊(${block.blockX}, ${block.blockY}) 渲染完成`);
+}
+
+/**
+ * 繪製無限世界（所有可見區塊）
+ * 
+ * @param {CanvasRenderingContext2D} ctx - 主 Canvas 上下文
+ * @param {BlockManager} blockManager - 區塊管理器
+ * @param {Object} camera - 相機對象 {x, y}
+ * @param {number} viewportWidth - 視口寬度
+ * @param {number} viewportHeight - 視口高度
+ */
+export function drawWorld(ctx, blockManager, camera, viewportWidth, viewportHeight) {
+    // 清空畫布
+    ctx.clearRect(0, 0, viewportWidth, viewportHeight);
+
+    // 計算需要顯示的區塊範圍
+    const visibleBlocks = blockManager.getRequiredBlocks(
+        camera.x + viewportWidth / 2,
+        camera.y + viewportHeight / 2,
+        viewportWidth,
+        viewportHeight
+    );
+
+    console.log(`📷 相機位置: (${Math.floor(camera.x)}, ${Math.floor(camera.y)}), 可見區塊: ${visibleBlocks.length}`);
+
+    // 渲染每個可見區塊
+    for (const {blockX, blockY} of visibleBlocks) {
+        const block = blockManager.getOrCreateBlock(blockX, blockY);
+
+        // 如果區塊未載入，顯示佔位符
+        if (!block.isLoaded) {
+            const worldX = blockX * blockManager.BLOCK_WIDTH;
+            const worldY = blockY * blockManager.BLOCK_HEIGHT;
+            const screenX = worldX - camera.x;
+            const screenY = worldY - camera.y;
+
+            // 繪製載入中佔位符（灰色邊框 + 文字）
+            ctx.strokeStyle = '#666';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(screenX, screenY, blockManager.BLOCK_WIDTH, blockManager.BLOCK_HEIGHT);
+            
+            ctx.fillStyle = '#999';
+            ctx.font = '48px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(
+                `Loading Block (${blockX}, ${blockY})...`,
+                screenX + blockManager.BLOCK_WIDTH / 2,
+                screenY + blockManager.BLOCK_HEIGHT / 2
+            );
+
+            continue;
+        }
+
+        // 如果區塊已載入但未渲染，立即渲染
+        if (!block.isRendered) {
+            renderBlockToCache(block);
+        }
+
+        // 繪製區塊 Canvas 到主 Canvas
+        if (block.canvas) {
+            const worldX = blockX * blockManager.BLOCK_WIDTH;
+            const worldY = blockY * blockManager.BLOCK_HEIGHT;
+            const screenX = worldX - camera.x;
+            const screenY = worldY - camera.y;
+
+            ctx.drawImage(block.canvas, screenX, screenY);
+        }
+    }
+}
+
+/**
+ * Alpha 混合函數（從原有代碼複製，確保兼容）
+ */
+function blendColors(foreground, background, alpha) {
+    return [
+        Math.round(foreground[0] * alpha + background[0] * (1 - alpha)),
+        Math.round(foreground[1] * alpha + background[1] * (1 - alpha)),
+        Math.round(foreground[2] * alpha + background[2] * (1 - alpha))
+    ];
+}
