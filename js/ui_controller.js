@@ -464,8 +464,9 @@ export function setupMapDragging(renderCallback) {
  * 公開 API：初始化 UI 控制器
  * ========================================
  * @param {Object} renderCallback - 渲染回調函數 { renderAll }
+ * @param {Object} options - 選項 { disableDragging: boolean }
  */
-export function initUI(renderCallback) {
+export function initUI(renderCallback, options = {}) {
     console.log('╔════════════════════════════════════════════════════════╗');
     console.log('║  🎨 Phase 19.0 + 20: UI Modernization + Infinite Map ║');
     console.log('╚════════════════════════════════════════════════════════╝');
@@ -476,12 +477,17 @@ export function initUI(renderCallback) {
     // 2. 設置自動生成
     setupAutoGeneration(renderCallback);
 
-    // 3. Phase 20: 設置無限地圖拖動
-    setupMapDragging(renderCallback);
+    // 3. Phase 20: 設置無限地圖拖動（可選）
+    // Phase 21.5: 如果使用新的無限地圖系統，則跳過舊的拖動系統
+    if (!options.disableDragging) {
+        setupMapDragging(renderCallback);
+        console.log('   🗺️  拖動地圖探索無限世界！');
+    } else {
+        console.log('   🗺️  拖動系統已禁用（由外部系統接管）');
+    }
 
     console.log('✅ UI 控制器初始化完成');
     console.log('   💡 現在可以直接拖動滑桿，系統會自動重新生成！');
-    console.log('   🗺️  拖動地圖探索無限世界！');
 }
 
 // 也可以暴露到 window（方便測試）

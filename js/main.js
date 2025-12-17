@@ -148,7 +148,8 @@ function init() {
     initUI();
 
     // 5. Phase 19.0: 初始化現代化 UI 控制器（自動生成 + 雲層禁用）
-    initModernUI({ renderAll });
+    // Phase 21.5: 禁用拖動系統（由 startInfiniteMap 接管）
+    initModernUI({ renderAll }, { disableDragging: true });
 
     // 6. Phase 20.5: 設置預覽訊息處理器（LOD 優化）
     setupPreviewHandler(renderAll);
