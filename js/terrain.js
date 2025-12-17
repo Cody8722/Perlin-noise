@@ -46,6 +46,7 @@ class TerrainWorkerController {
         this.state = 'IDLE';
         this.worker = null;
         this.initPromise = null;  // Track ongoing initialization
+        this.previewHandler = null;  // Phase 20.5: 預覽訊息處理器
     }
 
     /**
@@ -78,8 +79,14 @@ class TerrainWorkerController {
                 // Create Worker instance
                 this.worker = new Worker('./js/terrain.worker.js', { type: 'module' });
 
-                // Setup message handler for initialization
+                // Phase 20.5: Setup message handler with preview routing
                 this.worker.onmessage = (e) => {
+                    // 優先處理預覽訊息（路由到預覽處理器）
+                    if (e.data.type === 'preview' && this.previewHandler) {
+                        this.previewHandler(e.data);
+                        return;
+                    }
+
                     if (e.data.type === 'initialized') {
                         // Transition: INITIALIZING -> READY
                         this.state = 'READY';
@@ -159,9 +166,15 @@ class TerrainWorkerController {
         console.log('   🔧 FSM: READY → GENERATING');
 
         return new Promise((resolve, reject) => {
-            // Setup message handler for generation
+            // Phase 20.5: Setup message handler with preview routing
             this.worker.onmessage = (e) => {
                 const { type, progress, data, stats, message } = e.data;
+
+                // 優先處理預覽訊息（路由到預覽處理器）
+                if (type === 'preview' && this.previewHandler) {
+                    this.previewHandler(e.data);
+                    return;
+                }
 
                 switch (type) {
                     case 'progress':
@@ -227,6 +240,14 @@ class TerrainWorkerController {
     }
 
     /**
+     * Phase 20.5: 設定預覽訊息處理器
+     * @param {function} handler - 預覽處理函數
+     */
+    setPreviewHandler(handler) {
+        this.previewHandler = handler;
+    }
+
+    /**
      * Get current state
      * @returns {string} Current FSM state
      */
@@ -254,61 +275,54 @@ export async function getTerrainWorker() {
  * @param {function} renderCallback - 渲染回調函數
  */
 export async function setupPreviewHandler(renderCallback) {
-    const worker = await getTerrainWorker();
+    // 確保 Worker 已初始化
+    await workerController.init();
 
-    // 保存原始的 onmessage handler（如果有的話）
-    const originalHandler = worker.onmessage;
+    // 使用 Controller 的 setPreviewHandler 方法（持久化處理器）
+    workerController.setPreviewHandler((messageData) => {
+        const { data } = messageData;
 
-    // 設置複合訊息處理器（同時處理預覽和其他訊息）
-    worker.onmessage = (e) => {
-        const { type, data } = e.data;
+        // 處理預覽資料
+        console.log(`🎨 收到預覽資料 (${data.width}x${data.height}, resolution: ${data.resolution})`);
 
-        if (type === 'preview') {
-            // 處理預覽資料
-            console.log(`🎨 收到預覽資料 (${data.width}x${data.height}, resolution: ${data.resolution})`);
+        // 將低解析度資料放大到全解析度
+        const fullWidth = MAP_CONFIG.width;
+        const fullHeight = MAP_CONFIG.height;
 
-            // 將低解析度資料放大到全解析度
-            const fullWidth = MAP_CONFIG.width;
-            const fullHeight = MAP_CONFIG.height;
+        // 簡單的最近鄰插值（快速）
+        const previewWidth = data.width;
+        const previewHeight = data.height;
+        const scaleX = fullWidth / previewWidth;
+        const scaleY = fullHeight / previewHeight;
 
-            // 簡單的最近鄰插值（快速）
-            const previewWidth = data.width;
-            const previewHeight = data.height;
-            const scaleX = fullWidth / previewWidth;
-            const scaleY = fullHeight / previewHeight;
+        for (let y = 0; y < fullHeight; y++) {
+            for (let x = 0; x < fullWidth; x++) {
+                const fullIndex = y * fullWidth + x;
 
-            for (let y = 0; y < fullHeight; y++) {
-                for (let x = 0; x < fullWidth; x++) {
-                    const fullIndex = y * fullWidth + x;
+                // 找到對應的預覽像素（最近鄰）
+                const previewX = Math.floor(x / scaleX);
+                const previewY = Math.floor(y / scaleY);
+                const previewIndex = previewY * previewWidth + previewX;
 
-                    // 找到對應的預覽像素（最近鄰）
-                    const previewX = Math.floor(x / scaleX);
-                    const previewY = Math.floor(y / scaleY);
-                    const previewIndex = previewY * previewWidth + previewX;
-
-                    // 複製資料
-                    mapData.height[fullIndex] = data.height[previewIndex];
-                    mapData.moisture[fullIndex] = data.moisture[previewIndex];
-                    mapData.baseMoisture[fullIndex] = data.moisture[previewIndex];
-                    mapData.temperature[fullIndex] = data.temperature[previewIndex];
-                }
+                // 複製資料
+                mapData.height[fullIndex] = data.height[previewIndex];
+                mapData.moisture[fullIndex] = data.moisture[previewIndex];
+                mapData.baseMoisture[fullIndex] = data.moisture[previewIndex];
+                mapData.temperature[fullIndex] = data.temperature[previewIndex];
             }
-
-            // 清空 flux 和 lakes（預覽模式沒有河流）
-            mapData.flux.fill(0);
-            mapData.lakes.fill(0);
-
-            // 觸發渲染
-            if (renderCallback) {
-                renderCallback();
-            }
-
-            console.log('✅ 預覽渲染完成');
-        } else if (originalHandler) {
-            // 轉發其他訊息給原始處理器
-            originalHandler(e);
         }
-    };
+
+        // 清空 flux 和 lakes（預覽模式沒有河流）
+        mapData.flux.fill(0);
+        mapData.lakes.fill(0);
+
+        // 觸發渲染
+        if (renderCallback) {
+            renderCallback();
+        }
+
+        console.log('✅ 預覽渲染完成');
+    });
 }
 
 // 地圖資料儲存
