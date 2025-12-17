@@ -23,22 +23,35 @@ import { terrainConfig } from './config.js';
  *
  * @param {Function} func - 要防抖的函數
  * @param {number} wait - 等待時間（毫秒）
- * @returns {Function} 防抖後的函數
+ * @returns {Function} 防抖後的函數（含 .cancel() 方法）
  *
  * 使用範例：
  * const debouncedGenerate = debounce(() => generateTerrain(), 300);
  * slider.addEventListener('input', debouncedGenerate);
+ * debouncedGenerate.cancel();  // 取消待執行的函數
  */
 export function debounce(func, wait) {
     let timeout;
-    return function executedFunction(...args) {
+
+    function executedFunction(...args) {
         const later = () => {
             clearTimeout(timeout);
+            timeout = null;
             func(...args);
         };
         clearTimeout(timeout);
         timeout = setTimeout(later, wait);
+    }
+
+    // Phase 20.5: 添加 cancel 方法（用於中斷 debounce）
+    executedFunction.cancel = function() {
+        if (timeout) {
+            clearTimeout(timeout);
+            timeout = null;
+        }
     };
+
+    return executedFunction;
 }
 
 /**
@@ -371,7 +384,10 @@ export function setupMapDragging(renderCallback) {
         lastX = e.clientX;
         lastY = e.clientY;
         canvas.style.cursor = 'grabbing';
-        console.log('🖱️  開始拖動（預覽模式）');
+
+        // Phase 20.5 Fix: 取消待執行的完整生成（避免與預覽模式衝突）
+        debouncedFullGeneration.cancel();
+        console.log('🖱️  開始拖動（預覽模式）- 已取消待執行的完整生成');
     });
 
     // 滑鼠移動 - 更新偏移並觸發預覽
