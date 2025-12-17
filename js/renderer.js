@@ -484,7 +484,14 @@ export function renderBlockToCache(block) {
 
     // 計算最大 flux 值用於河流分級
     const flux_data = block.flux || new Float32Array(block.width * block.height);
-    const maxFlux = Math.max(1, ...flux_data);
+
+    // 使用循環計算最大值（避免展開運算符導致堆疊溢出）
+    let maxFlux = 1;
+    for (let i = 0; i < flux_data.length; i++) {
+        if (flux_data[i] > maxFlux) {
+            maxFlux = flux_data[i];
+        }
+    }
 
     const MEDIUM_RIVER_THRESHOLD = maxFlux * RENDER_CONSTANTS.MEDIUM_RIVER_THRESHOLD;
     const LARGE_RIVER_THRESHOLD = maxFlux * RENDER_CONSTANTS.LARGE_RIVER_THRESHOLD;
