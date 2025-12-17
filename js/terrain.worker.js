@@ -46,7 +46,7 @@ let mapData = null;
  * 主訊息處理器
  */
 self.onmessage = function(e) {
-    const { cmd, config, data, numDroplets, previewConfig } = e.data;
+    const { cmd, config, data, numDroplets, previewConfig, blockConfig } = e.data;
 
     try {
         switch (cmd) {
@@ -63,6 +63,11 @@ self.onmessage = function(e) {
             case 'generatePreview':
                 // Phase 20.5: 快速預覽模式（僅生成地形，跳過河流）
                 handleGeneratePreview(previewConfig);
+                break;
+
+            case 'generateBlock':
+                // Phase 21: 區塊生成模式（生成指定區塊的完整地形）
+                handleGenerateBlock(blockConfig);
                 break;
 
             default:
@@ -549,4 +554,141 @@ function handleGeneratePreview(previewConfig) {
     ]);
 
     console.log('⚡ Worker: 預覽資料已發送');
+}
+
+/**
+ * ========================================
+ * Phase 21: 處理區塊生成命令
+ * ========================================
+ * 生成指定區塊的完整地形數據（3000×2000 像素）
+ *
+ * @param {Object} blockConfig - 區塊配置
+ * @param {number} blockConfig.blockX - 區塊 X 座標
+ * @param {number} blockConfig.blockY - 區塊 Y 座標
+ * @param {number} blockConfig.blockWidth - 區塊寬度（像素）
+ * @param {number} blockConfig.blockHeight - 區塊高度（像素）
+ * @param {number} blockConfig.seed - 隨機種子
+ * @param {number} blockConfig.scale - Perlin Noise 縮放
+ * @param {number} blockConfig.octaves - Perlin Noise 層數
+ * @param {number} blockConfig.seaLevel - 海平面高度
+ * @param {number} blockConfig.moistureOffset - 濕度偏移
+ * @param {number} blockConfig.temperatureOffset - 溫度偏移
+ */
+function handleGenerateBlock(blockConfig) {
+    console.log(`🧱 Worker: handleGenerateBlock 被呼叫 - 區塊(${blockConfig.blockX}, ${blockConfig.blockY})`);
+
+    // 計算區塊的世界座標偏移
+    const offsetX = blockConfig.blockX * blockConfig.blockWidth;
+    const offsetY = blockConfig.blockY * blockConfig.blockHeight;
+
+    // 構建 previewConfig（複用 handleGeneratePreview 邏輯）
+    const previewConfig = {
+        width: blockConfig.blockWidth,
+        height: blockConfig.blockHeight,
+        offsetX: offsetX,
+        offsetY: offsetY,
+        resolution: 1.0,  // 區塊始終使用全解析度
+        seed: blockConfig.seed,
+        scale: blockConfig.scale,
+        octaves: blockConfig.octaves,
+        seaLevel: blockConfig.seaLevel,
+        moistureOffset: blockConfig.moistureOffset || 0,
+        temperatureOffset: blockConfig.temperatureOffset || 0
+    };
+
+    console.log(`🧱 Worker: 開始生成區塊 (${blockConfig.blockWidth}×${blockConfig.blockHeight}), 世界座標偏移: (${offsetX}, ${offsetY})`);
+
+    // 複用 handleGeneratePreview 的邏輯生成地形
+    // 注意：這裡我們直接內聯生成邏輯，因為需要返回不同的類型標記
+    const totalPixels = blockConfig.blockWidth * blockConfig.blockHeight;
+
+    // 初始化 Perlin Noise
+    if (typeof noise !== 'undefined' && typeof noise.seed === 'function') {
+        noise.seed(blockConfig.seed);
+    } else if (typeof noise !== 'undefined' && typeof noise.init === 'function') {
+        noise.init(blockConfig.seed);
+    }
+
+    // 創建輸出陣列
+    const heightData = new Float32Array(totalPixels);
+    const moistureData = new Float32Array(totalPixels);
+    const temperatureData = new Float32Array(totalPixels);
+
+    // 常數
+    const MOISTURE_OCTAVES = 3;
+    const MOISTURE_SCALE_MULTIPLIER = 2.5;
+    const MOISTURE_SEED_OFFSET = 1000;
+    const TEMPERATURE_OCTAVES = 2;
+    const TEMPERATURE_SCALE_MULTIPLIER = 3.0;
+    const TEMPERATURE_SEED_OFFSET = 2000;
+    const TEMPERATURE_LATITUDE_FACTOR = 2.0;
+    const TEMPERATURE_ELEVATION_FACTOR = 0.5;
+    const LATITUDE_PERIOD = 10000;
+
+    // 生成地形資料
+    for (let y = 0; y < blockConfig.blockHeight; y++) {
+        for (let x = 0; x < blockConfig.blockWidth; x++) {
+            const index = y * blockConfig.blockWidth + x;
+            const worldX = x + offsetX;
+            const worldY = y + offsetY;
+
+            // 1. 生成高度
+            const height = noise.fbm(worldX, worldY, blockConfig.octaves, blockConfig.scale, 0);
+            heightData[index] = height;
+
+            // 2. 生成濕度
+            const moisture = noise.fbm(
+                worldX,
+                worldY,
+                MOISTURE_OCTAVES,
+                blockConfig.scale * MOISTURE_SCALE_MULTIPLIER,
+                MOISTURE_SEED_OFFSET
+            ) + (blockConfig.moistureOffset || 0);
+            moistureData[index] = moisture;
+
+            // 3. 生成溫度
+            const normalizedY = (worldY % LATITUDE_PERIOD + LATITUDE_PERIOD) % LATITUDE_PERIOD;
+            const latitude = normalizedY / LATITUDE_PERIOD;
+            const latitudeFactor = 1 - Math.abs(latitude - 0.5) * TEMPERATURE_LATITUDE_FACTOR;
+
+            const temperatureNoise = noise.fbm(
+                worldX,
+                worldY,
+                TEMPERATURE_OCTAVES,
+                blockConfig.scale * TEMPERATURE_SCALE_MULTIPLIER,
+                TEMPERATURE_SEED_OFFSET
+            );
+
+            const elevationFactor = height > blockConfig.seaLevel
+                ? Math.max(0, 1 - (height - blockConfig.seaLevel) * TEMPERATURE_ELEVATION_FACTOR)
+                : 1.0;
+
+            const temperature = (latitudeFactor * 0.6 + temperatureNoise * 0.4) * elevationFactor + (blockConfig.temperatureOffset || 0);
+            temperatureData[index] = Math.max(0, Math.min(1, temperature));
+        }
+    }
+
+    // 回傳區塊資料（type: 'block' 用於區分預覽）
+    const response = {
+        type: 'block',
+        data: {
+            blockX: blockConfig.blockX,
+            blockY: blockConfig.blockY,
+            height: heightData,
+            moisture: moistureData,
+            temperature: temperatureData,
+            width: blockConfig.blockWidth,
+            height: blockConfig.blockHeight
+        }
+    };
+
+    console.log(`🧱 Worker: 區塊生成完成，準備回傳 (${blockConfig.blockWidth}×${blockConfig.blockHeight})`);
+
+    self.postMessage(response, [
+        heightData.buffer,
+        moistureData.buffer,
+        temperatureData.buffer
+    ]);
+
+    console.log('🧱 Worker: 區塊資料已發送');
 }

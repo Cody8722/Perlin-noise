@@ -15,6 +15,7 @@
 import noise from './noise.js';
 import {
     MAP_CONFIG,
+    BLOCK_CONFIG,  // Phase 21: 區塊配置
     terrainConfig,
     TERRAIN_GEN_CONSTANTS,
     RIVER_GEN_CONSTANTS,
@@ -25,6 +26,7 @@ import {
     RENDER_CONFIG,
     SYSTEM_CONFIG
 } from './config.js';
+import { getBlockManager } from './block_manager.js';  // Phase 21: 區塊管理器
 
 // ========================================
 // Phase 18.99 Part 4: FSM Controller (Audit Report - Option B Step 2)
@@ -47,6 +49,7 @@ class TerrainWorkerController {
         this.worker = null;
         this.initPromise = null;  // Track ongoing initialization
         this.previewHandler = null;  // Phase 20.5: 預覽訊息處理器
+        this.blockHandler = null;    // Phase 21: 區塊生成訊息處理器
     }
 
     /**
@@ -79,11 +82,17 @@ class TerrainWorkerController {
                 // Create Worker instance
                 this.worker = new Worker('./js/terrain.worker.js', { type: 'module' });
 
-                // Phase 20.5: Setup message handler with preview routing
+                // Phase 20.5/21: Setup message handler with preview and block routing
                 this.worker.onmessage = (e) => {
                     // 優先處理預覽訊息（路由到預覽處理器）
                     if (e.data.type === 'preview' && this.previewHandler) {
                         this.previewHandler(e.data);
+                        return;
+                    }
+
+                    // Phase 21: 處理區塊生成訊息（路由到區塊處理器）
+                    if (e.data.type === 'block' && this.blockHandler) {
+                        this.blockHandler(e.data);
                         return;
                     }
 
@@ -166,13 +175,19 @@ class TerrainWorkerController {
         console.log('   🔧 FSM: READY → GENERATING');
 
         return new Promise((resolve, reject) => {
-            // Phase 20.5: Setup message handler with preview routing
+            // Phase 20.5/21: Setup message handler with preview and block routing
             this.worker.onmessage = (e) => {
                 const { type, progress, data, stats, message } = e.data;
 
                 // 優先處理預覽訊息（路由到預覽處理器）
                 if (type === 'preview' && this.previewHandler) {
                     this.previewHandler(e.data);
+                    return;
+                }
+
+                // Phase 21: 處理區塊生成訊息（路由到區塊處理器）
+                if (type === 'block' && this.blockHandler) {
+                    this.blockHandler(e.data);
                     return;
                 }
 
@@ -245,6 +260,14 @@ class TerrainWorkerController {
      */
     setPreviewHandler(handler) {
         this.previewHandler = handler;
+    }
+
+    /**
+     * Phase 21: 設定區塊生成訊息處理器
+     * @param {function} handler - 區塊處理函數
+     */
+    setBlockHandler(handler) {
+        this.blockHandler = handler;
     }
 
     /**
@@ -1129,4 +1152,104 @@ export function applyHydrologyToMoistureAdvanced(strength = 1.0, spreadRadius = 
     console.log(`✅ 水文回饋應用完成（進階平滑版）！`);
     console.log(`   - 影響像素: ${affectedPixels}`);
     console.log(`   - 執行時間: ${(endTime - startTime).toFixed(2)} ms`);
+}
+
+/**
+ * ========================================
+ * Phase 21: 區塊載入函數
+ * ========================================
+ * 異步載入指定區塊的地形數據
+ *
+ * @param {number} blockX - 區塊 X 座標
+ * @param {number} blockY - 區塊 Y 座標
+ * @returns {Promise<BlockData>} 載入完成的區塊數據
+ */
+export async function loadBlock(blockX, blockY) {
+    const blockManager = getBlockManager();
+    const block = blockManager.getOrCreateBlock(blockX, blockY);
+
+    // 如果區塊已載入，直接返回
+    if (block.isLoaded) {
+        console.log(`🧱 區塊(${blockX}, ${blockY}) 已緩存，直接返回`);
+        block.touch();  // 更新訪問時間
+        return block;
+    }
+
+    // 如果正在載入中，等待完成
+    if (block.isLoading) {
+        console.log(`⏳ 區塊(${blockX}, ${blockY}) 載入中，等待完成...`);
+        // 簡單的輪詢等待（更好的方式是使用 Promise 隊列）
+        while (block.isLoading) {
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+        return block;
+    }
+
+    // 開始載入區塊
+    block.isLoading = true;
+    console.log(`🧱 開始載入區塊(${blockX}, ${blockY})...`);
+
+    try {
+        // 確保 Worker 已初始化
+        await workerController.init();
+
+        // 創建 Promise 等待 Worker 回應
+        const blockData = await new Promise((resolve, reject) => {
+            // 設置一次性的區塊處理器
+            const originalHandler = workerController.blockHandler;
+
+            workerController.setBlockHandler((messageData) => {
+                const { data } = messageData;
+
+                // 確認是我們請求的區塊
+                if (data.blockX === blockX && data.blockY === blockY) {
+                    console.log(`🎨 收到區塊(${blockX}, ${blockY}) 數據`);
+
+                    // 恢復原始處理器
+                    workerController.setBlockHandler(originalHandler);
+
+                    resolve(data);
+                }
+            });
+
+            // 發送區塊生成命令到 Worker
+            workerController.worker.postMessage({
+                cmd: 'generateBlock',
+                blockConfig: {
+                    blockX: blockX,
+                    blockY: blockY,
+                    blockWidth: BLOCK_CONFIG.WIDTH,
+                    blockHeight: BLOCK_CONFIG.HEIGHT,
+                    seed: terrainConfig.seed,
+                    scale: terrainConfig.scale,
+                    octaves: terrainConfig.octaves,
+                    seaLevel: terrainConfig.seaLevel,
+                    moistureOffset: terrainConfig.moistureOffset,
+                    temperatureOffset: terrainConfig.temperatureOffset
+                }
+            });
+
+            // 設置超時（60秒）
+            setTimeout(() => {
+                workerController.setBlockHandler(originalHandler);
+                reject(new Error(`區塊(${blockX}, ${blockY}) 載入超時`));
+            }, 60000);
+        });
+
+        // 將 Worker 返回的數據存儲到區塊中
+        block.height_data = blockData.height;
+        block.moisture_data = blockData.moisture;
+        block.temperature_data = blockData.temperature;
+        block.isLoaded = true;
+        block.isLoading = false;
+        block.touch();
+
+        console.log(`✅ 區塊(${blockX}, ${blockY}) 載入完成`);
+        return block;
+
+    } catch (error) {
+        block.isLoading = false;
+        console.error(`❌ 區塊(${blockX}, ${blockY}) 載入失敗:`, error);
+        throw error;
+    }
 }
