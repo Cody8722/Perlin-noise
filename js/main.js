@@ -12,6 +12,7 @@ import { terrainConfig, getBiomeColor, BLOCK_CONFIG } from './config.js';  // Ph
 import { getBlockManager } from './block_manager.js';  // Phase 21: 區塊管理器
 import comprehensiveTestBot from './comprehensive-test-bot.js';  // Phase 12.5: 綜合測試機器人
 import stressBot from './stress-test.js';                        // Phase 13: 壓力測試機器人
+import { getUXReviewer } from './ux_reviewer.js';                // Phase 20.1: UX Sentinel 性能監控
 
 /**
  * ========================================
@@ -160,6 +161,10 @@ function init() {
 
     // 6. 暴露測試 API 到全域作用域（僅用於 UI 測試）
     exposeTestAPIs();
+
+    // 8. Phase 20.1: 啟動 UX Sentinel 性能監控
+    const uxReviewer = getUXReviewer();
+    uxReviewer.start();
 }
 
 /**
@@ -217,6 +222,7 @@ function startInfiniteMap() {
     const canvas = document.getElementById('terrainLayer');
     const ctx = canvas.getContext('2d');
     const blockManager = getBlockManager();
+    const uxReviewer = getUXReviewer();  // Phase 20.1: 性能監控
 
     // 視口尺寸
     const viewportWidth = canvas.width;
@@ -224,11 +230,21 @@ function startInfiniteMap() {
 
     // 載入初始區塊（Block 0,0）
     console.log('📦 載入初始區塊(0, 0)...');
+    uxReviewer.reportActivity('GENERATING');  // 開始生成
+    const loadStartTime = performance.now();
+
     loadBlock(0, 0).then(block => {
+        const loadEndTime = performance.now();
+        const loadDuration = loadEndTime - loadStartTime;
+
+        uxReviewer.reportRenderTime(loadDuration);  // 報告載入時間
+        uxReviewer.reportActivity('IDLE');  // 回到閒置
+
         console.log('✅ 初始區塊載入完成，開始渲染');
         animate();
     }).catch(error => {
         console.error('❌ 初始區塊載入失敗:', error);
+        uxReviewer.reportActivity('IDLE');  // 失敗也回到閒置
     });
 
     // 渲染循環
@@ -256,12 +272,14 @@ function setupInfiniteDragging(canvas, blockManager) {
     let isDragging = false;
     let lastX = 0;
     let lastY = 0;
+    const uxReviewer = getUXReviewer();  // Phase 20.1: 性能監控
 
     canvas.addEventListener('mousedown', (e) => {
         isDragging = true;
         lastX = e.clientX;
         lastY = e.clientY;
         canvas.style.cursor = 'grabbing';
+        uxReviewer.reportActivity('DRAGGING');  // 開始拖動
         console.log('🖱️  開始無限拖動');
     });
 
@@ -274,6 +292,9 @@ function setupInfiniteDragging(canvas, blockManager) {
         // 更新相機位置（世界座標，無邊界）
         camera.x -= deltaX;
         camera.y -= deltaY;
+
+        // Phase 20.1: 更新偏移量顯示
+        uxReviewer.updateOffset(camera.x, camera.y);
 
         lastX = e.clientX;
         lastY = e.clientY;
@@ -292,8 +313,17 @@ function setupInfiniteDragging(canvas, blockManager) {
             const block = blockManager.getOrCreateBlock(blockX, blockY);
             if (!block.isLoaded && !block.isLoading) {
                 console.log(`📥 開始載入區塊(${blockX}, ${blockY})`);
-                loadBlock(blockX, blockY).catch(err => {
+                uxReviewer.reportActivity('GENERATING');  // 開始生成新區塊
+
+                const blockLoadStartTime = performance.now();
+                loadBlock(blockX, blockY).then(() => {
+                    const blockLoadEndTime = performance.now();
+                    const blockLoadDuration = blockLoadEndTime - blockLoadStartTime;
+                    uxReviewer.reportRenderTime(blockLoadDuration);
+                    uxReviewer.reportActivity('DRAGGING');  // 回到拖動狀態
+                }).catch(err => {
                     console.error(`❌ 區塊(${blockX}, ${blockY}) 載入失敗:`, err);
+                    uxReviewer.reportActivity('DRAGGING');  // 失敗也回到拖動狀態
                 });
             }
         }
@@ -303,6 +333,7 @@ function setupInfiniteDragging(canvas, blockManager) {
         if (isDragging) {
             isDragging = false;
             canvas.style.cursor = 'grab';
+            uxReviewer.reportActivity('IDLE');  // 停止拖動
             console.log('🖱️  停止拖動');
         }
     });
@@ -311,6 +342,7 @@ function setupInfiniteDragging(canvas, blockManager) {
         if (isDragging) {
             isDragging = false;
             canvas.style.cursor = 'grab';
+            uxReviewer.reportActivity('IDLE');  // 停止拖動
         }
     });
 
