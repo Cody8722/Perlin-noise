@@ -138,13 +138,11 @@ function init() {
     // 1. 初始化渲染器
     initRenderer();
 
-    // 2. 生成初始地形
-    generateTerrain();
+    // 2. Phase 21.5: 跳過舊的地形生成和渲染（由無限地圖系統接管）
+    // generateTerrain();  // 不再需要
+    // renderAll();        // 不再需要
 
-    // 3. 渲染場景
-    renderAll();
-
-    // 4. 初始化 UI 控制
+    // 3. 初始化 UI 控制
     initUI();
 
     // 5. Phase 19.0: 初始化現代化 UI 控制器（自動生成 + 雲層禁用）
