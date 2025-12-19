@@ -49,7 +49,7 @@ class TerrainWorkerController {
         this.worker = null;
         this.initPromise = null;  // Track ongoing initialization
         this.previewHandler = null;  // Phase 20.5: 預覽訊息處理器
-        this.blockHandler = null;    // Phase 21: 區塊生成訊息處理器
+        this.blockHandlers = new Map();  // Phase 21.1: 區塊生成訊息處理器 Map (支援並發請求)
     }
 
     /**
@@ -185,9 +185,18 @@ class TerrainWorkerController {
                     return;
                 }
 
-                // Phase 21: 處理區塊生成訊息（路由到區塊處理器）
-                if (type === 'block' && this.blockHandler) {
-                    this.blockHandler(e.data);
+                // Phase 21.1: 處理區塊生成訊息（路由到對應的區塊處理器）
+                if (type === 'block') {
+                    const blockKey = `${data.blockX},${data.blockY}`;
+                    const handler = this.blockHandlers.get(blockKey);
+
+                    if (handler) {
+                        handler(e.data);
+                        // 處理完成後移除 handler（一次性使用）
+                        this.blockHandlers.delete(blockKey);
+                    } else {
+                        console.warn(`⚠️ 收到未預期的區塊(${data.blockX}, ${data.blockY})訊息`);
+                    }
                     return;
                 }
 
@@ -263,11 +272,24 @@ class TerrainWorkerController {
     }
 
     /**
-     * Phase 21: 設定區塊生成訊息處理器
+     * Phase 21.1: 設定區塊生成訊息處理器（支援並發請求）
+     * @param {number} blockX - 區塊 X 座標
+     * @param {number} blockY - 區塊 Y 座標
      * @param {function} handler - 區塊處理函數
      */
-    setBlockHandler(handler) {
-        this.blockHandler = handler;
+    setBlockHandler(blockX, blockY, handler) {
+        const blockKey = `${blockX},${blockY}`;
+        this.blockHandlers.set(blockKey, handler);
+    }
+
+    /**
+     * Phase 21.1: 移除區塊生成訊息處理器
+     * @param {number} blockX - 區塊 X 座標
+     * @param {number} blockY - 區塊 Y 座標
+     */
+    removeBlockHandler(blockX, blockY) {
+        const blockKey = `${blockX},${blockY}`;
+        this.blockHandlers.delete(blockKey);
     }
 
     /**
@@ -1195,21 +1217,12 @@ export async function loadBlock(blockX, blockY) {
 
         // 創建 Promise 等待 Worker 回應
         const blockData = await new Promise((resolve, reject) => {
-            // 設置一次性的區塊處理器
-            const originalHandler = workerController.blockHandler;
-
-            workerController.setBlockHandler((messageData) => {
+            // Phase 21.1: 設置區塊專屬的處理器（支援並發請求）
+            workerController.setBlockHandler(blockX, blockY, (messageData) => {
                 const { data } = messageData;
 
-                // 確認是我們請求的區塊
-                if (data.blockX === blockX && data.blockY === blockY) {
-                    console.log(`🎨 收到區塊(${blockX}, ${blockY}) 數據`);
-
-                    // 恢復原始處理器
-                    workerController.setBlockHandler(originalHandler);
-
-                    resolve(data);
-                }
+                console.log(`🎨 收到區塊(${blockX}, ${blockY}) 數據`);
+                resolve(data);
             });
 
             // 發送區塊生成命令到 Worker
@@ -1231,7 +1244,8 @@ export async function loadBlock(blockX, blockY) {
 
             // 設置超時（60秒）
             setTimeout(() => {
-                workerController.setBlockHandler(originalHandler);
+                // Phase 21.1: 清理超時的 handler
+                workerController.removeBlockHandler(blockX, blockY);
                 reject(new Error(`區塊(${blockX}, ${blockY}) 載入超時`));
             }, 60000);
         });
