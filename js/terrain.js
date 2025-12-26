@@ -1274,6 +1274,8 @@ export async function loadBlock(blockX, blockY) {
         block.height_data = blockData.height;
         block.moisture_data = blockData.moisture;
         block.temperature_data = blockData.temperature;
+        block.flux_data = blockData.flux;        // Phase 21.2: 存儲河流數據
+        block.lakes = blockData.lakes;           // Phase 21.2: 存儲湖泊數據
         block.isLoaded = true;
         block.isLoading = false;
         block.touch();

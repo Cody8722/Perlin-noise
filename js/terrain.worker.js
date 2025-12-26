@@ -668,6 +668,11 @@ function handleGenerateBlock(blockConfig) {
         }
     }
 
+    // Phase 21.2: 生成河流數據（臨時：空數據，後續優化為真實河流模擬）
+    const totalPixels = blockConfig.blockWidth * blockConfig.blockHeight;
+    const fluxData = new Float32Array(totalPixels);  // 全零 = 無河流
+    const lakesData = new Uint8Array(totalPixels);   // 全零 = 無湖泊
+
     // 回傳區塊資料（type: 'block' 用於區分預覽）
     const response = {
         type: 'block',
@@ -677,6 +682,8 @@ function handleGenerateBlock(blockConfig) {
             height: heightData,
             moisture: moistureData,
             temperature: temperatureData,
+            flux: fluxData,        // Phase 21.2: 新增河流數據
+            lakes: lakesData,      // Phase 21.2: 新增湖泊數據
             width: blockConfig.blockWidth,
             height: blockConfig.blockHeight
         }
@@ -697,7 +704,9 @@ function handleGenerateBlock(blockConfig) {
         self.postMessage(response, [
             heightData.buffer,
             moistureData.buffer,
-            temperatureData.buffer
+            temperatureData.buffer,
+            fluxData.buffer,      // Phase 21.2: 傳輸河流數據
+            lakesData.buffer      // Phase 21.2: 傳輸湖泊數據
         ]);
 
         console.log('✅ Worker: 區塊資料已成功發送');
