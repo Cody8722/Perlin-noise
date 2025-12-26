@@ -79,8 +79,9 @@ class TerrainWorkerController {
 
         this.initPromise = new Promise((resolve, reject) => {
             try {
-                // Create Worker instance
-                this.worker = new Worker('./js/terrain.worker.js', { type: 'module' });
+                // Create Worker instance (with cache busting version parameter)
+                // Phase 21.2: Added ?v=21.2 to force browser to reload updated worker
+                this.worker = new Worker('./js/terrain.worker.js?v=21.2', { type: 'module' });
 
                 // Phase 21.1: Setup message handler with preview and block routing
                 this.worker.onmessage = (e) => {
