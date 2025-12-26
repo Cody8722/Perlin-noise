@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Worker 載入測試</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #fff;
+        }
+        .status {
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border: 2px solid;
+        }
+        .success {
+            background: #1a4d1a;
+            border-color: #00ff88;
+            color: #00ff88;
+        }
+        .error {
+            background: #4d1a1a;
+            border-color: #ff4444;
+            color: #ff4444;
+        }
+        .info {
+            background: #1a1a4d;
+            border-color: #00d4ff;
+            color: #00d4ff;
+        }
+        pre {
+            background: #0a0a0a;
+            padding: 10px;
+            border-radius: 3px;
+            overflow-x: auto;
+        }
+        button {
+            background: #00d4ff;
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #00ff88;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 Worker 載入診斷工具</h1>
+
+    <div class="status info">
+        <strong>測試目的：</strong>診斷 terrain.worker.js 是否能正常載入
+    </div>
+
+    <div id="results"></div>
+
+    <h2>測試操作：</h2>
+    <button onclick="testWorkerLoad()">🧪 測試 Worker 載入</button>
+    <button onclick="testDirectAccess()">📄 測試直接訪問檔案</button>
+    <button onclick="testWithTimestamp()">⏰ 測試帶時間戳載入</button>
+    <button onclick="location.reload()">🔄 重新整理頁面</button>
+
+    <script>
+        const results = document.getElementById('results');
+
+        function log(message, type = 'info') {
+            const div = document.createElement('div');
+            div.className = `status ${type}`;
+            div.innerHTML = message;
+            results.appendChild(div);
+        }
+
+        function testWorkerLoad() {
+            results.innerHTML = '';
+            log('🧪 測試 1：嘗試載入 Worker（無快取破壞）...', 'info');
+
+            try {
+                const worker = new Worker('./js/terrain.worker.js', { type: 'module' });
+
+                worker.onmessage = (e) => {
+                    log(`✅ Worker 成功載入並回應！<br><pre>${JSON.stringify(e.data, null, 2)}</pre>`, 'success');
+                };
+
+                worker.onerror = (error) => {
+                    log(`❌ Worker 載入失敗<br>錯誤：${error.message || 'Event'}`, 'error');
+                    console.error('Worker error:', error);
+                };
+
+                setTimeout(() => {
+                    log('⏳ 正在等待 Worker 回應...（5 秒超時）', 'info');
+                }, 100);
+
+                setTimeout(() => {
+                    log('⚠️ 5 秒內沒有收到回應，Worker 可能載入失敗', 'error');
+                }, 5000);
+
+            } catch (error) {
+                log(`❌ Worker 建構失敗<br>錯誤：${error.message}`, 'error');
+            }
+        }
+
+        function testWithTimestamp() {
+            results.innerHTML = '';
+            const timestamp = Date.now();
+            const url = `./js/terrain.worker.js?v=21.4&t=${timestamp}`;
+            log(`🧪 測試 2：使用時間戳載入 Worker<br>URL: <code>${url}</code>`, 'info');
+
+            try {
+                const worker = new Worker(url, { type: 'module' });
+
+                worker.onmessage = (e) => {
+                    log(`✅ Worker 成功載入並回應！<br><pre>${JSON.stringify(e.data, null, 2)}</pre>`, 'success');
+                };
+
+                worker.onerror = (error) => {
+                    log(`❌ Worker 載入失敗<br>錯誤：${error.message || 'Event'}`, 'error');
+                    console.error('Worker error:', error);
+                };
+
+                setTimeout(() => {
+                    log('⏳ 正在等待 Worker 回應...（5 秒超時）', 'info');
+                }, 100);
+
+                setTimeout(() => {
+                    log('⚠️ 5 秒內沒有收到回應', 'error');
+                }, 5000);
+
+            } catch (error) {
+                log(`❌ Worker 建構失敗<br>錯誤：${error.message}`, 'error');
+            }
+        }
+
+        function testDirectAccess() {
+            results.innerHTML = '';
+            log('🧪 測試 3：直接訪問檔案（使用 fetch）...', 'info');
+
+            const urls = [
+                './js/terrain.worker.js',
+                `./js/terrain.worker.js?t=${Date.now()}`
+            ];
+
+            urls.forEach((url, index) => {
+                fetch(url)
+                    .then(response => {
+                        if (response.ok) {
+                            return response.text();
+                        } else {
+                            throw new Error(`HTTP ${response.status} ${response.statusText}`);
+                        }
+                    })
+                    .then(content => {
+                        const size = (content.length / 1024).toFixed(2);
+                        const preview = content.substring(0, 100).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                        log(`✅ 檔案可訪問（${index === 0 ? '無快取破壞' : '帶時間戳'}）<br>
+                             大小: ${size} KB<br>
+                             預覽:<br><pre>${preview}...</pre>`, 'success');
+                    })
+                    .catch(error => {
+                        log(`❌ 檔案無法訪問（${index === 0 ? '無快取破壞' : '帶時間戳'}）<br>
+                             URL: <code>${url}</code><br>
+                             錯誤: ${error.message}`, 'error');
+                    });
+            });
+        }
+
+        // 自動執行測試
+        window.addEventListener('load', () => {
+            log('📋 頁面已載入，準備進行診斷', 'info');
+            log('💡 請點擊上方按鈕開始測試', 'info');
+        });
+    </script>
+</body>
+</html>
