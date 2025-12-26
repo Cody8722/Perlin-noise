@@ -67,6 +67,7 @@
     <button onclick="testModuleWorker()">🔸 測試 2: 模組 Worker（import config.js）</button>
     <button onclick="testNoiseWorker()">🔺 測試 2.5: Noise Worker（import noise.js）</button>
     <button onclick="testStructureWorker()">🔻 測試 2.7: 結構測試（terrain 結構）</button>
+    <button onclick="testTerrainCopy()">🔷 測試 2.9: Terrain 副本（+postMessage）</button>
     <button onclick="testWorkerLoad()">🔶 測試 3: 完整 Worker（terrain.worker.js）</button>
     <hr style="margin: 10px 0;">
     <button onclick="testDirectAccess()">📄 測試直接訪問檔案</button>
@@ -302,6 +303,38 @@
                     };
                     log(`❌ 失敗！結構測試無法載入<br><pre>${JSON.stringify(errorDetails, null, 2)}</pre>`, 'error');
                     console.error('Structure worker error:', error);
+                };
+
+                setTimeout(() => {
+                    log('⚠️ 5 秒內沒有收到回應', 'error');
+                }, 5000);
+            } catch (error) {
+                log(`❌ Worker 建構失敗：${error.message}`, 'error');
+            }
+        }
+
+        function testTerrainCopy() {
+            results.innerHTML = '';
+            log('🔷 測試 2.9：載入 Terrain 完整副本（添加了 postMessage）...', 'info');
+            log('   這是 terrain.worker.js 的完全副本，只在最後添加了一個 postMessage', 'info');
+
+            try {
+                const worker = new Worker('./js/test-terrain-copy.worker.js', { type: 'module' });
+                log(`✅ Worker 物件已創建`, 'info');
+
+                worker.onmessage = (e) => {
+                    log(`✅ <strong>關鍵！</strong> Terrain 副本可以載入！<br><pre>${JSON.stringify(e.data, null, 2)}</pre>`, 'success');
+                };
+
+                worker.onerror = (error) => {
+                    const errorDetails = {
+                        message: error.message || '(無訊息)',
+                        filename: error.filename || '(未知)',
+                        lineno: error.lineno || '(未知)',
+                        type: error.type || '(未知)'
+                    };
+                    log(`❌ Terrain 副本也失敗了！<br><pre>${JSON.stringify(errorDetails, null, 2)}</pre>`, 'error');
+                    console.error('Terrain copy error:', error);
                 };
 
                 setTimeout(() => {
