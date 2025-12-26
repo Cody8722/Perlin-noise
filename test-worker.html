@@ -90,20 +90,34 @@
                 };
 
                 worker.onerror = (error) => {
-                    log(`❌ Worker 載入失敗<br>錯誤：${error.message || 'Event'}`, 'error');
-                    console.error('Worker error:', error);
+                    // 詳細的錯誤資訊
+                    const errorDetails = {
+                        message: error.message || '(無訊息)',
+                        filename: error.filename || '(未知)',
+                        lineno: error.lineno || '(未知)',
+                        colno: error.colno || '(未知)',
+                        type: error.type || '(未知)',
+                        error: error.error ? error.error.toString() : '(無詳細錯誤)'
+                    };
+
+                    log(`❌ Worker 載入失敗<br><pre>${JSON.stringify(errorDetails, null, 2)}</pre>`, 'error');
+                    console.error('詳細 Worker 錯誤:', error);
+                    console.error('錯誤物件:', errorDetails);
                 };
 
+                // 測試 Worker 是否真的被創建
+                log(`✅ Worker 物件已創建（但可能尚未載入腳本）`, 'info');
+
                 setTimeout(() => {
-                    log('⏳ 正在等待 Worker 回應...（5 秒超時）', 'info');
+                    log('⏳ 正在等待 Worker 回應或錯誤...（5 秒超時）', 'info');
                 }, 100);
 
                 setTimeout(() => {
-                    log('⚠️ 5 秒內沒有收到回應，Worker 可能載入失敗', 'error');
+                    log('⚠️ 5 秒內沒有收到回應或錯誤<br>可能原因：<br>1. Worker 載入中但很慢<br>2. Worker 卡住了<br>3. 沒有發送初始訊息', 'error');
                 }, 5000);
 
             } catch (error) {
-                log(`❌ Worker 建構失敗<br>錯誤：${error.message}`, 'error');
+                log(`❌ Worker 建構失敗（創建 Worker 物件時就失敗了）<br>錯誤：${error.message}<br>Stack:<br><pre>${error.stack}</pre>`, 'error');
             }
         }
 
