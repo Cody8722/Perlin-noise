@@ -63,7 +63,10 @@
     <div id="results"></div>
 
     <h2>測試操作：</h2>
-    <button onclick="testWorkerLoad()">🧪 測試 Worker 載入</button>
+    <button onclick="testSimpleWorker()">🔹 測試 1: 簡單 Worker（無模組）</button>
+    <button onclick="testModuleWorker()">🔸 測試 2: 模組 Worker（單一 import）</button>
+    <button onclick="testWorkerLoad()">🔶 測試 3: 完整 Worker（terrain.worker.js）</button>
+    <hr style="margin: 10px 0;">
     <button onclick="testDirectAccess()">📄 測試直接訪問檔案</button>
     <button onclick="testWithTimestamp()">⏰ 測試帶時間戳載入</button>
     <button onclick="location.reload()">🔄 重新整理頁面</button>
@@ -189,10 +192,69 @@
             });
         }
 
+        function testSimpleWorker() {
+            results.innerHTML = '';
+            log('🔹 測試 1：載入簡單 Worker（不使用 ES6 模組）...', 'info');
+
+            try {
+                const worker = new Worker('./js/test-simple.worker.js');
+                log(`✅ Worker 物件已創建`, 'info');
+
+                worker.onmessage = (e) => {
+                    log(`✅ 成功！簡單 Worker 可以載入<br><pre>${JSON.stringify(e.data, null, 2)}</pre>`, 'success');
+                };
+
+                worker.onerror = (error) => {
+                    log(`❌ 失敗！連簡單 Worker 都無法載入<br>錯誤：${error.message || '(無訊息)'}`, 'error');
+                    console.error('Simple worker error:', error);
+                };
+
+                setTimeout(() => {
+                    log('⚠️ 5 秒內沒有收到回應', 'error');
+                }, 5000);
+            } catch (error) {
+                log(`❌ Worker 建構失敗：${error.message}`, 'error');
+            }
+        }
+
+        function testModuleWorker() {
+            results.innerHTML = '';
+            log('🔸 測試 2：載入模組 Worker（使用單一 import）...', 'info');
+
+            try {
+                const worker = new Worker('./js/test-module.worker.js', { type: 'module' });
+                log(`✅ Worker 物件已創建`, 'info');
+
+                worker.onmessage = (e) => {
+                    log(`✅ 成功！模組 Worker 可以載入<br><pre>${JSON.stringify(e.data, null, 2)}</pre>`, 'success');
+                };
+
+                worker.onerror = (error) => {
+                    const errorDetails = {
+                        message: error.message || '(無訊息)',
+                        filename: error.filename || '(未知)',
+                        lineno: error.lineno || '(未知)',
+                        type: error.type || '(未知)'
+                    };
+                    log(`❌ 失敗！模組 Worker 無法載入<br><pre>${JSON.stringify(errorDetails, null, 2)}</pre>`, 'error');
+                    console.error('Module worker error:', error);
+                };
+
+                setTimeout(() => {
+                    log('⚠️ 5 秒內沒有收到回應', 'error');
+                }, 5000);
+            } catch (error) {
+                log(`❌ Worker 建構失敗：${error.message}`, 'error');
+            }
+        }
+
         // 自動執行測試
         window.addEventListener('load', () => {
             log('📋 頁面已載入，準備進行診斷', 'info');
-            log('💡 請點擊上方按鈕開始測試', 'info');
+            log('💡 請依序點擊測試按鈕：', 'info');
+            log('   1️⃣ 測試簡單 Worker（確認基本功能）', 'info');
+            log('   2️⃣ 測試模組 Worker（確認 ES6 模組支援）', 'info');
+            log('   3️⃣ 測試完整 Worker（診斷實際問題）', 'info');
         });
     </script>
 </body>
