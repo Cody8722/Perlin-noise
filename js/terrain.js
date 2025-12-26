@@ -82,7 +82,7 @@ class TerrainWorkerController {
                 // Create Worker instance
                 this.worker = new Worker('./js/terrain.worker.js', { type: 'module' });
 
-                // Phase 20.5/21: Setup message handler with preview and block routing
+                // Phase 21.1: Setup message handler with preview and block routing
                 this.worker.onmessage = (e) => {
                     // 優先處理預覽訊息（路由到預覽處理器）
                     if (e.data.type === 'preview' && this.previewHandler) {
@@ -90,9 +90,19 @@ class TerrainWorkerController {
                         return;
                     }
 
-                    // Phase 21: 處理區塊生成訊息（路由到區塊處理器）
-                    if (e.data.type === 'block' && this.blockHandler) {
-                        this.blockHandler(e.data);
+                    // Phase 21.1: 處理區塊生成訊息（路由到對應的區塊處理器）
+                    if (e.data.type === 'block') {
+                        const { data } = e.data;
+                        const blockKey = `${data.blockX},${data.blockY}`;
+                        const handler = this.blockHandlers.get(blockKey);
+
+                        if (handler) {
+                            handler(e.data);
+                            // 處理完成後移除 handler（一次性使用）
+                            this.blockHandlers.delete(blockKey);
+                        } else {
+                            console.warn(`⚠️ 收到未預期的區塊(${data.blockX}, ${data.blockY})訊息`);
+                        }
                         return;
                     }
 
