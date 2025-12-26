@@ -192,6 +192,8 @@ class TerrainWorkerController {
         return new Promise((resolve, reject) => {
             // Phase 20.5/21: Setup message handler with preview and block routing
             this.worker.onmessage = (e) => {
+                console.log('🔍 DEBUG (generateRivers): Worker 訊息接收', { type: e.data.type, hasData: !!e.data.data });
+
                 const { type, progress, data, stats, message } = e.data;
 
                 // 優先處理預覽訊息（路由到預覽處理器）
@@ -203,14 +205,17 @@ class TerrainWorkerController {
                 // Phase 21.1: 處理區塊生成訊息（路由到對應的區塊處理器）
                 if (type === 'block') {
                     const blockKey = `${data.blockX},${data.blockY}`;
+                    console.log(`🔍 DEBUG (generateRivers): blockKey="${blockKey}", handlers size=${this.blockHandlers.size}`);
+
                     const handler = this.blockHandlers.get(blockKey);
 
                     if (handler) {
+                        console.log(`✅ 找到 handler (generateRivers) for ${blockKey}`);
                         handler(e.data);
                         // 處理完成後移除 handler（一次性使用）
                         this.blockHandlers.delete(blockKey);
                     } else {
-                        console.warn(`⚠️ 收到未預期的區塊(${data.blockX}, ${data.blockY})訊息`);
+                        console.warn(`⚠️ 收到未預期的區塊(${data.blockX}, ${data.blockY})訊息 (generateRivers)`);
                     }
                     return;
                 }
