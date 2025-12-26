@@ -689,28 +689,15 @@ function handleGenerateBlock(blockConfig) {
         }
     };
 
-    console.log(`🧱 Worker: 區塊生成完成，準備回傳 (${blockConfig.blockWidth}×${blockConfig.blockHeight})`);
+    console.log(`🧱 Worker: 區塊生成完成，回傳中... (${blockConfig.blockWidth}×${blockConfig.blockHeight})`);
 
-    try {
-        console.log('🔍 DEBUG Worker: postMessage 之前', {
-            hasResponse: !!response,
-            type: response.type,
-            hasData: !!response.data,
-            blockX: response.data?.blockX,
-            blockY: response.data?.blockY,
-            bufferSizes: [heightData.buffer.byteLength, moistureData.buffer.byteLength, temperatureData.buffer.byteLength]
-        });
+    self.postMessage(response, [
+        heightData.buffer,
+        moistureData.buffer,
+        temperatureData.buffer,
+        fluxData.buffer,      // Phase 21.2: 傳輸河流數據
+        lakesData.buffer      // Phase 21.2: 傳輸湖泊數據
+    ]);
 
-        self.postMessage(response, [
-            heightData.buffer,
-            moistureData.buffer,
-            temperatureData.buffer,
-            fluxData.buffer,      // Phase 21.2: 傳輸河流數據
-            lakesData.buffer      // Phase 21.2: 傳輸湖泊數據
-        ]);
-
-        console.log('✅ Worker: 區塊資料已成功發送');
-    } catch (error) {
-        console.error('❌ Worker: postMessage 失敗', error);
-    }
+    console.log('✅ Worker: 區塊資料已發送 (包含 flux + lakes)');
 }

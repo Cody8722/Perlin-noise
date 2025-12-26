@@ -80,29 +80,24 @@ class TerrainWorkerController {
         this.initPromise = new Promise((resolve, reject) => {
             try {
                 // Create Worker instance (with cache busting version parameter)
-                // Phase 21.2: Added ?v=21.2 to force browser to reload updated worker
-                this.worker = new Worker('./js/terrain.worker.js?v=21.2', { type: 'module' });
+                // Phase 21.3: Incremented to v=21.3 to force reload (simplified logging)
+                this.worker = new Worker('./js/terrain.worker.js?v=21.3', { type: 'module' });
 
-                // Phase 21.1: Setup message handler with preview and block routing
+                // Phase 21.3: Setup message handler with preview and block routing
                 this.worker.onmessage = (e) => {
-                    console.log('🔍 DEBUG: Worker 訊息接收', { type: e.data.type, hasData: !!e.data.data });
-
                     // 優先處理預覽訊息（路由到預覽處理器）
                     if (e.data.type === 'preview' && this.previewHandler) {
                         this.previewHandler(e.data);
                         return;
                     }
 
-                    // Phase 21.1: 處理區塊生成訊息（路由到對應的區塊處理器）
+                    // Phase 21.3: 處理區塊生成訊息（路由到對應的區塊處理器）
                     if (e.data.type === 'block') {
                         const { data } = e.data;
                         const blockKey = `${data.blockX},${data.blockY}`;
-                        console.log(`🔍 DEBUG: blockKey="${blockKey}", handlers size=${this.blockHandlers.size}, keys=${Array.from(this.blockHandlers.keys()).join(', ')}`);
-
                         const handler = this.blockHandlers.get(blockKey);
 
                         if (handler) {
-                            console.log(`✅ 找到 handler for ${blockKey}`);
                             handler(e.data);
                             // 處理完成後移除 handler（一次性使用）
                             this.blockHandlers.delete(blockKey);
@@ -191,10 +186,8 @@ class TerrainWorkerController {
         console.log('   🔧 FSM: READY → GENERATING');
 
         return new Promise((resolve, reject) => {
-            // Phase 20.5/21: Setup message handler with preview and block routing
+            // Phase 21.3: Setup message handler with preview and block routing
             this.worker.onmessage = (e) => {
-                console.log('🔍 DEBUG (generateRivers): Worker 訊息接收', { type: e.data.type, hasData: !!e.data.data });
-
                 const { type, progress, data, stats, message } = e.data;
 
                 // 優先處理預覽訊息（路由到預覽處理器）
@@ -203,20 +196,17 @@ class TerrainWorkerController {
                     return;
                 }
 
-                // Phase 21.1: 處理區塊生成訊息（路由到對應的區塊處理器）
+                // Phase 21.3: 處理區塊生成訊息（路由到對應的區塊處理器）
                 if (type === 'block') {
                     const blockKey = `${data.blockX},${data.blockY}`;
-                    console.log(`🔍 DEBUG (generateRivers): blockKey="${blockKey}", handlers size=${this.blockHandlers.size}`);
-
                     const handler = this.blockHandlers.get(blockKey);
 
                     if (handler) {
-                        console.log(`✅ 找到 handler (generateRivers) for ${blockKey}`);
                         handler(e.data);
                         // 處理完成後移除 handler（一次性使用）
                         this.blockHandlers.delete(blockKey);
                     } else {
-                        console.warn(`⚠️ 收到未預期的區塊(${data.blockX}, ${data.blockY})訊息 (generateRivers)`);
+                        console.warn(`⚠️ 收到未預期的區塊(${data.blockX}, ${data.blockY})訊息`);
                     }
                     return;
                 }
