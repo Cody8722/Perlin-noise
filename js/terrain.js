@@ -127,8 +127,17 @@ class TerrainWorkerController {
                     // Transition: INITIALIZING -> ERROR
                     this.state = 'ERROR';
                     console.error('❌ Worker 創建失敗:', error);
+                    console.error(`   📄 Worker URL: ./js/terrain.worker.js?v=21.4&t=${cacheBuster}`);
+                    console.error('   💡 可能原因：');
+                    console.error('      1. 伺服器 502 錯誤（部署中或伺服器問題）');
+                    console.error('      2. Worker 檔案無法載入（檢查網路連線）');
+                    console.error('      3. CORS 或安全性策略阻擋');
+                    console.error('   🔧 建議：等待 1-2 分鐘後重新整理頁面（Ctrl+Shift+F5）');
                     console.log('   🔧 FSM: INITIALIZING → ERROR');
-                    reject(error);
+
+                    const detailedError = new Error('Worker 載入失敗 - 可能是伺服器暫時無法回應（502）');
+                    detailedError.originalError = error;
+                    reject(detailedError);
                 };
 
                 // Send init command
@@ -158,6 +167,8 @@ class TerrainWorkerController {
                 // Transition: INITIALIZING -> ERROR
                 this.state = 'ERROR';
                 console.error('❌ Worker 初始化異常:', error);
+                console.error('   💡 這可能是 Worker 建構函式本身的問題');
+                console.error('   🔧 請檢查瀏覽器是否支援 Web Workers');
                 console.log('   🔧 FSM: INITIALIZING → ERROR');
                 reject(error);
             }

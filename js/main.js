@@ -245,6 +245,30 @@ function startInfiniteMap() {
     }).catch(error => {
         console.error('❌ 初始區塊載入失敗:', error);
         uxReviewer.reportActivity('IDLE');  // 失敗也回到閒置
+
+        // Phase 21.4: 顯示友善的錯誤提示
+        const canvas = document.getElementById('terrainLayer');
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#1a1a1a';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.font = 'bold 20px Arial';
+        ctx.fillStyle = '#ff4444';
+        ctx.textAlign = 'center';
+        ctx.fillText('⚠️ Worker 載入失敗', canvas.width / 2, canvas.height / 2 - 60);
+
+        ctx.font = '16px Arial';
+        ctx.fillStyle = '#ffaa44';
+        ctx.fillText('可能原因：伺服器暫時無法回應（502 錯誤）', canvas.width / 2, canvas.height / 2 - 20);
+
+        ctx.font = '14px Arial';
+        ctx.fillStyle = '#aaaaaa';
+        ctx.fillText('建議：等待 1-2 分鐘後重新整理頁面', canvas.width / 2, canvas.height / 2 + 20);
+        ctx.fillText('（按 Ctrl+Shift+F5 強制重新載入）', canvas.width / 2, canvas.height / 2 + 45);
+
+        ctx.font = '12px monospace';
+        ctx.fillStyle = '#666666';
+        ctx.fillText('詳細錯誤請查看瀏覽器 Console（F12）', canvas.width / 2, canvas.height / 2 + 80);
     });
 
     // 渲染循環
