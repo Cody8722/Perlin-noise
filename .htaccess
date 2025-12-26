@@ -1,0 +1,40 @@
+# ================================================
+# Phase 21.4: 修復 Worker 載入問題
+# ================================================
+# 確保 JavaScript 檔案有正確的 MIME type
+
+# JavaScript 檔案
+<IfModule mod_mime.c>
+    # ES6 模組和普通 JavaScript
+    AddType application/javascript .js
+    AddType application/javascript .mjs
+
+    # 確保 Worker 檔案可以被正確解析
+    <FilesMatch "\.(js|mjs)$">
+        Header set Content-Type "application/javascript; charset=utf-8"
+    </FilesMatch>
+</IfModule>
+
+# 啟用 CORS（允許同源 Worker 載入）
+<IfModule mod_headers.c>
+    # 允許 Cross-Origin isolation（某些瀏覽器需要）
+    Header set Cross-Origin-Opener-Policy "same-origin"
+    Header set Cross-Origin-Embedder-Policy "require-corp"
+
+    # 允許所有來源訪問資源（開發用）
+    Header set Access-Control-Allow-Origin "*"
+    Header set Access-Control-Allow-Methods "GET, POST, OPTIONS"
+    Header set Access-Control-Allow-Headers "Content-Type"
+</IfModule>
+
+# 禁用快取（開發階段）
+<IfModule mod_headers.c>
+    <FilesMatch "\.(js|css|html)$">
+        Header set Cache-Control "no-cache, no-store, must-revalidate"
+        Header set Pragma "no-cache"
+        Header set Expires "0"
+    </FilesMatch>
+</IfModule>
+
+# 如果上述設定導致問題，可以只保留最基本的：
+# AddType application/javascript .js
