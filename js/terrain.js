@@ -84,6 +84,8 @@ class TerrainWorkerController {
 
                 // Phase 21.1: Setup message handler with preview and block routing
                 this.worker.onmessage = (e) => {
+                    console.log('🔍 DEBUG: Worker 訊息接收', { type: e.data.type, hasData: !!e.data.data });
+
                     // 優先處理預覽訊息（路由到預覽處理器）
                     if (e.data.type === 'preview' && this.previewHandler) {
                         this.previewHandler(e.data);
@@ -94,9 +96,12 @@ class TerrainWorkerController {
                     if (e.data.type === 'block') {
                         const { data } = e.data;
                         const blockKey = `${data.blockX},${data.blockY}`;
+                        console.log(`🔍 DEBUG: blockKey="${blockKey}", handlers size=${this.blockHandlers.size}, keys=${Array.from(this.blockHandlers.keys()).join(', ')}`);
+
                         const handler = this.blockHandlers.get(blockKey);
 
                         if (handler) {
+                            console.log(`✅ 找到 handler for ${blockKey}`);
                             handler(e.data);
                             // 處理完成後移除 handler（一次性使用）
                             this.blockHandlers.delete(blockKey);
