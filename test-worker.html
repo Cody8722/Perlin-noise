@@ -151,6 +151,10 @@
                 fetch(url)
                     .then(response => {
                         if (response.ok) {
+                            // 檢查 Content-Type
+                            const contentType = response.headers.get('Content-Type');
+                            log(`📋 Content-Type: <code>${contentType || '(未設定)'}</code>`, 'info');
+
                             return response.text();
                         } else {
                             throw new Error(`HTTP ${response.status} ${response.statusText}`);
