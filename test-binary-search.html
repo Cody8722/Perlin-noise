@@ -48,8 +48,9 @@
 
         // 執行測試序列
         setTimeout(() => test('test-terrain-structure.worker.js', '基準：結構測試（已知成功）'), 100);
-        setTimeout(() => test('test-terrain-half.worker.js', '測試 A：前半部分（前 230 行）'), 3500);
-        setTimeout(() => test('test-terrain-copy.worker.js', '測試 B：完整副本（已知失敗）'), 7000);
+        setTimeout(() => test('test-terrain-init-only.worker.js', '測試 1：只有 handleInit（line 1-117）'), 3500);
+        setTimeout(() => test('test-terrain-half.worker.js', '測試 2：前 230 行（已知失敗）'), 7000);
+        setTimeout(() => test('test-terrain-copy.worker.js', '測試 3：完整副本（已知失敗）'), 10500);
     </script>
 </body>
 </html>
