@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>二分測試</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #1a1a1a; color: #fff; }
+        .result { padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .success { background: #1a4d1a; border: 2px solid #00ff88; }
+        .error { background: #4d1a1a; border: 2px solid #ff4444; }
+    </style>
+</head>
+<body>
+    <h1>🔬 二分測試：找出問題函式</h1>
+    <div id="results"></div>
+    <script>
+        const results = document.getElementById('results');
+
+        function test(filename, description) {
+            const div = document.createElement('div');
+            div.innerHTML = `<strong>${description}</strong><br>測試中...`;
+            results.appendChild(div);
+
+            try {
+                const worker = new Worker(`./js/${filename}`, { type: 'module' });
+
+                worker.onmessage = (e) => {
+                    div.className = 'result success';
+                    div.innerHTML = `<strong>${description}</strong><br>✅ 成功！<br><pre>${JSON.stringify(e.data, null, 2)}</pre>`;
+                };
+
+                worker.onerror = (error) => {
+                    div.className = 'result error';
+                    div.innerHTML = `<strong>${description}</strong><br>❌ 失敗！<br>檔案: ${error.filename || '(未知)'}<br>行: ${error.lineno || '(未知)'}`;
+                };
+
+                setTimeout(() => {
+                    if (!div.className) {
+                        div.className = 'result error';
+                        div.innerHTML = `<strong>${description}</strong><br>⚠️ 超時（沒有回應）`;
+                    }
+                }, 3000);
+            } catch (error) {
+                div.className = 'result error';
+                div.innerHTML = `<strong>${description}</strong><br>❌ 建構失敗：${error.message}`;
+            }
+        }
+
+        // 執行測試序列
+        setTimeout(() => test('test-terrain-structure.worker.js', '基準：結構測試（已知成功）'), 100);
+        setTimeout(() => test('test-terrain-half.worker.js', '測試 A：前半部分（前 230 行）'), 3500);
+        setTimeout(() => test('test-terrain-copy.worker.js', '測試 B：完整副本（已知失敗）'), 7000);
+    </script>
+</body>
+</html>
