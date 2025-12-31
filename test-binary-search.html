@@ -47,10 +47,10 @@
         }
 
         // 執行測試序列
-        setTimeout(() => test('test-terrain-structure.worker.js', '基準：結構測試（已知成功）'), 100);
-        setTimeout(() => test('test-terrain-init-only.worker.js', '測試 1：只有 handleInit（line 1-117）'), 3500);
-        setTimeout(() => test('test-terrain-half.worker.js', '測試 2：前 230 行（已知失敗）'), 7000);
-        setTimeout(() => test('test-terrain-copy.worker.js', '測試 3：完整副本（已知失敗）'), 10500);
+        setTimeout(() => test('test-terrain-init-only.worker.js', '✅ 基準：handleInit（line 1-117）'), 100);
+        setTimeout(() => test('test-line-170.worker.js', '測試 A：line 1-170'), 3500);
+        setTimeout(() => test('test-line-200.worker.js', '測試 B：line 1-200'), 7000);
+        setTimeout(() => test('test-terrain-half.worker.js', '❌ 已知失敗：line 1-230'), 10500);
     </script>
 </body>
 </html>
