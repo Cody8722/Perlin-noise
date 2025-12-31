@@ -46,11 +46,9 @@
             }
         }
 
-        // 執行測試序列 - 精確定位到單行
-        setTimeout(() => test('test-terrain-init-only.worker.js', '✅ Line 1-117'), 100);
-        setTimeout(() => test('test-line-120.worker.js', '測試: Line 1-120 (函式定義+if)'), 3500);
-        setTimeout(() => test('test-line-122.worker.js', '測試: Line 1-122 (+throw)'), 7000);
-        setTimeout(() => test('test-line-125.worker.js', '❌ Line 1-125'), 10500);
+        // 執行測試序列 - 正確的測試
+        setTimeout(() => test('test-terrain-init-only.worker.js', '✅ 只有 handleInit'), 100);
+        setTimeout(() => test('test-both-functions.worker.js', '測試: handleInit + 簡化的 handleGenerateRivers'), 3500);
     </script>
 </body>
 </html>
