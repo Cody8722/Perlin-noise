@@ -37,6 +37,7 @@
 
 // 導入 Perlin Noise 模組（ES6 Module Worker 使用 import）
 import noise from './noise.js';
+import { RIVER_GEN_CONSTANTS, LAKE_CONSTANTS, PROGRESS_CONSTANTS } from './config.js';
 
 // Worker 本地狀態
 let workerConfig = null;
@@ -668,10 +669,75 @@ function handleGenerateBlock(blockConfig) {
         }
     }
 
-    // Phase 21.2: 生成河流數據（臨時：空數據，後續優化為真實河流模擬）
+    // Phase 22: 區塊河流生成（真實水滴模擬）
     // totalPixels 已在 line 603 宣告，直接使用
-    const fluxData = new Float32Array(totalPixels);  // 全零 = 無河流
-    const lakesData = new Uint8Array(totalPixels);   // 全零 = 無湖泊
+    console.log(`🌊 開始生成區塊河流...`);
+    const fluxData = new Float32Array(totalPixels);
+    const lakesData = new Uint8Array(totalPixels);
+
+    // 設置臨時 mapData 供 simulateDroplet 使用
+    const savedMapData = mapData;  // 保存原本的 mapData
+    mapData = {
+        height: heightData,
+        moisture: moistureData,
+        temperature: temperatureData,
+        flux: fluxData,
+        lakes: lakesData,
+        width: blockConfig.blockWidth,
+        height: blockConfig.blockHeight
+    };
+
+    // 構建最小配置供 simulateDroplet 使用
+    const riverConfig = {
+        world: {
+            river: RIVER_GEN_CONSTANTS,
+            lake: LAKE_CONSTANTS,
+            progress: PROGRESS_CONSTANTS
+        },
+        runtime: {
+            seaLevel: blockConfig.seaLevel
+        }
+    };
+
+    // 收集陸地座標（高於海平面）
+    const landCoords = [];
+    for (let y = 0; y < blockConfig.blockHeight; y++) {
+        for (let x = 0; x < blockConfig.blockWidth; x++) {
+            const index = y * blockConfig.blockWidth + x;
+            if (heightData[index] > blockConfig.seaLevel) {
+                landCoords.push({ x, y });
+            }
+        }
+    }
+
+    // 如果有陸地，模擬水滴
+    if (landCoords.length > 0) {
+        // 根據區塊大小調整水滴密度
+        // 原始地圖 1000×1000 = 1M 像素，使用 10000 水滴
+        // 區塊 3000×2000 = 6M 像素，按比例增加水滴數
+        const dropletDensity = 0.01;  // 每 100 像素 1 個水滴
+        const numDroplets = Math.floor(totalPixels * dropletDensity);
+
+        console.log(`🌊 區塊陸地像素: ${landCoords.length}, 水滴數: ${numDroplets}`);
+
+        // 模擬水滴
+        let successfulDroplets = 0;
+        for (let i = 0; i < numDroplets; i++) {
+            const randomIndex = Math.floor(noise.random() * landCoords.length);
+            const startPos = landCoords[randomIndex];
+            const pathLength = simulateDroplet(startPos.x, startPos.y, riverConfig);
+            if (pathLength > 0) {
+                successfulDroplets++;
+            }
+        }
+
+        console.log(`🌊 河流模擬完成: ${successfulDroplets}/${numDroplets} 水滴成功`);
+    } else {
+        console.log(`🌊 區塊為純海洋，跳過河流生成`);
+    }
+
+    // 恢復原本的 mapData
+    mapData = savedMapData;
 
     // 回傳區塊資料（type: 'block' 用於區分預覽）
     const response = {
