@@ -46,9 +46,14 @@
             }
         }
 
-        // 執行測試序列 - 正確的測試
+        // 執行測試序列 - 逐步擴展測試
         setTimeout(() => test('test-terrain-init-only.worker.js', '✅ 只有 handleInit'), 100);
-        setTimeout(() => test('test-both-functions.worker.js', '測試: handleInit + 簡化的 handleGenerateRivers'), 3500);
+        setTimeout(() => test('test-both-functions.worker.js', '✅ handleInit + 簡化 GenerateRivers (line 125)'), 3500);
+        setTimeout(() => test('test-expanded-v1.worker.js', '🔍 v1: 擴展到 line 166 (陸地收集)'), 7000);
+        setTimeout(() => test('test-expanded-v2.worker.js', '🔍 v2: 完整 handleGenerateRivers (line 220)'), 10500);
+        setTimeout(() => test('test-expanded-v3.worker.js', '🔍 v3: + simulateDroplet (line 410)'), 14000);
+        setTimeout(() => test('test-expanded-v4.worker.js', '🔍 v4: + handleGeneratePreview (line 576)'), 17500);
+        setTimeout(() => test('test-terrain-copy.worker.js', '🔍 完整檔案 (terrain.worker.js 副本)'), 21000);
     </script>
 </body>
 </html>
