@@ -701,3 +701,6 @@ function handleGenerateBlock(blockConfig) {
 
     console.log('✅ Worker: 區塊資料已發送 (包含 flux + lakes)');
 }
+
+// Test: Send immediate ready signal
+self.postMessage({ type: 'fixed-ready', message: 'Fixed terrain.worker.js loaded successfully!' });

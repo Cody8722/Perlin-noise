@@ -53,7 +53,8 @@
         setTimeout(() => test('test-expanded-v2.worker.js', '🔍 v2: 完整 handleGenerateRivers (line 220)'), 10500);
         setTimeout(() => test('test-expanded-v3.worker.js', '🔍 v3: + simulateDroplet (line 410)'), 14000);
         setTimeout(() => test('test-expanded-v4.worker.js', '🔍 v4: + handleGeneratePreview (line 576)'), 17500);
-        setTimeout(() => test('test-terrain-copy.worker.js', '🔍 完整檔案 (terrain.worker.js 副本)'), 21000);
+        setTimeout(() => test('test-terrain-copy.worker.js', '❌ 舊版完整檔案 (有 bug)'), 21000);
+        setTimeout(() => test('test-terrain-fixed.worker.js', '🎉 修復後的完整檔案'), 24500);
     </script>
 </body>
 </html>
