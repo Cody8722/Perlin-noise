@@ -721,10 +721,10 @@ function handleGenerateBlock(blockConfig) {
 
     // 如果有陸地，模擬水滴
     if (landCoords.length > 0) {
-        // 根據區塊大小調整水滴密度
-        // 原始地圖 1000×1000 = 1M 像素，使用 10000 水滴
-        // 區塊 3000×2000 = 6M 像素，按比例增加水滴數
-        const dropletDensity = 0.01;  // 每 100 像素 1 個水滴
+        // Phase 22.1: 優化水滴密度以避免超時
+        // 原始密度 0.01 (每 100 像素 1 滴) → 60,000 滴會超時
+        // 降低到 0.001 (每 1000 像素 1 滴) → ~6,000 滴
+        const dropletDensity = 0.001;  // 每 1000 像素 1 個水滴
         const numDroplets = Math.floor(totalPixels * dropletDensity);
 
         console.log(`🌊 區塊陸地像素: ${landCoords.length}, 水滴數: ${numDroplets}`);
