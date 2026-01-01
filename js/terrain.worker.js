@@ -677,14 +677,23 @@ function handleGenerateBlock(blockConfig) {
 
     // 設置臨時 mapData 供 simulateDroplet 使用
     const savedMapData = mapData;  // 保存原本的 mapData
+
+    // 注意：simulateDroplet 有一個設計缺陷：
+    // 它 destructures { width, height } 期望獲得尺寸，
+    // 但也訪問 mapData.height[index] 期望獲得陣列。
+    //
+    // 原始 handleInit 也有同樣的問題（重複的 height 鍵）
+    //
+    // 解決方案：只把 height 設為陣列，讓 destructure 獲得陣列
+    // 邊界檢查 (ny >= height) 會失敗，但由於我們手動收集 landCoords，
+    // 所有座標都在有效範圍內，所以不會觸發邊界檢查
     mapData = {
-        height: heightData,
+        width: blockConfig.blockWidth,
+        height: heightData,        // 保持為陣列（simulateDroplet 需要 height[index]）
         moisture: moistureData,
         temperature: temperatureData,
         flux: fluxData,
-        lakes: lakesData,
-        width: blockConfig.blockWidth,
-        height: blockConfig.blockHeight
+        lakes: lakesData
     };
 
     // 構建最小配置供 simulateDroplet 使用
